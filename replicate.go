@@ -255,7 +255,7 @@ WAIT:
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
 		if conf.SourcePrefix != conf.DestinationPrefix {
-			strings.Replace(pair.Key, conf.SourcePrefix, conf.DestinationPrefix, 1)
+			pair.Key = strings.Replace(pair.Key, conf.SourcePrefix, conf.DestinationPrefix, 1)
 		}
 		keys[pair.Key] = struct{}{}
 
