@@ -285,6 +285,7 @@ WAIT:
 		if _, err := kv.Put(pair, nil); err != nil {
 			return fmt.Errorf("failed to write key %s: %v", pair.Key, err)
 		}
+		log.Printf("[DEBUG] Updated key: %s", pair.Key)
 		updates++
 	}
 
@@ -301,6 +302,7 @@ WAIT:
 		if _, err := kv.Delete(key, nil); err != nil {
 			return fmt.Errorf("failed to delete key %s: %v", key, err)
 		}
+		log.Printf("[DEBUG] Deleted key: %s", key)
 		deletes++
 	}
 
