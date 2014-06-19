@@ -89,7 +89,13 @@ func realMain() int {
 	// Start replication
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
-	go replicate(replConf, client, stopCh, doneCh)
+	repl := &Replicator{
+		conf:   replConf,
+		client: client,
+		stopCh: stopCh,
+		doneCh: doneCh,
+	}
+	go repl.run()
 
 	// Wait for termination
 	signalCh := make(chan os.Signal, 1)

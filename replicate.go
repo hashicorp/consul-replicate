@@ -33,38 +33,46 @@ func shouldQuit(stopCh chan struct{}) bool {
 	}
 }
 
+// Replicator is used to do the actual replication
+type Replicator struct {
+	conf   *ReplicationConfig
+	client *consulapi.Client
+	stopCh chan struct{}
+	doneCh chan struct{}
+}
+
 // replicate is a long running routine that manages replication.
 // The stopCh is used to signal we should terminate, and the doneCh is closed
 // when we finish
-func replicate(conf *ReplicationConfig, client *consulapi.Client, stopCh, doneCh chan struct{}) {
+func (r *Replicator) run() {
 	defer func() {
 		// Cleanup the service entry
-		if err := removeService(conf, client); err != nil {
-			log.Printf("[ERR] Failed to cleanup %s service: %v", conf.Service, err)
+		if err := r.removeService(); err != nil {
+			log.Printf("[ERR] Failed to cleanup %s service: %v", r.conf.Service, err)
 		}
-		close(doneCh)
+		close(r.doneCh)
 	}()
 
 	// Ensure the service is setup on the local agent
-	if err := setupService(conf, client); err != nil {
-		log.Printf("[ERR] Failed to setup %s service: %v", conf.Service, err)
+	if err := r.setupService(); err != nil {
+		log.Printf("[ERR] Failed to setup %s service: %v", r.conf.Service, err)
 		return
 	}
 
 	// Keep our health check alive
-	if err := maintainCheck(conf, client, doneCh); err != nil {
+	if err := r.maintainCheck(); err != nil {
 		log.Printf("[ERR] Failed to update check TTL: %v", err)
 		return
 	}
 
 ACQUIRE:
 	// Re-check if we should exit
-	if shouldQuit(stopCh) {
+	if shouldQuit(r.stopCh) {
 		return
 	}
 
 	// Acquire leadership for this
-	leaderCh, err := acquireLeadership(conf, client, stopCh)
+	leaderCh, err := r.acquireLeadership()
 	if err != nil {
 		log.Printf("[ERR] Failed to acquire leadership: %v", err)
 		return
@@ -72,7 +80,7 @@ ACQUIRE:
 
 	// Replicate now that we are the leader
 REPLICATE:
-	if err := replicateKeys(conf, client, leaderCh, stopCh); err != nil {
+	if err := r.replicateKeys(leaderCh); err != nil {
 		log.Printf("[ERR] Failed to replicate keys: %v", err)
 	}
 
@@ -88,45 +96,45 @@ REPLICATE:
 		goto REPLICATE
 	case <-leaderCh:
 		goto ACQUIRE
-	case <-stopCh:
+	case <-r.stopCh:
 		return
 	}
 }
 
 // serviceID generates an ID for the service
-func serviceID(conf *ReplicationConfig) string {
-	return fmt.Sprintf("%s-%d", conf.Service, conf.Pid)
+func (r *Replicator) serviceID() string {
+	return fmt.Sprintf("%s-%d", r.conf.Service, r.conf.Pid)
 }
 
 // checkID generates an ID for the service check
-func checkID(conf *ReplicationConfig) string {
-	return fmt.Sprintf("service:%s", serviceID(conf))
+func (r *Replicator) checkID() string {
+	return fmt.Sprintf("service:%s", r.serviceID())
 }
 
 // setupService is used to create the local service entries with the agent
-func setupService(conf *ReplicationConfig, client *consulapi.Client) error {
+func (r *Replicator) setupService() error {
 	reg := &consulapi.AgentServiceRegistration{
-		ID:   serviceID(conf),
-		Name: conf.Service,
+		ID:   r.serviceID(),
+		Name: r.conf.Service,
 		Check: &consulapi.AgentServiceCheck{
 			TTL: "5s",
 		},
 	}
-	agent := client.Agent()
+	agent := r.client.Agent()
 	return agent.ServiceRegister(reg)
 }
 
 // removeService is used to cleanup the service entry we created
-func removeService(conf *ReplicationConfig, client *consulapi.Client) error {
-	agent := client.Agent()
-	return agent.ServiceDeregister(serviceID(conf))
+func (r *Replicator) removeService() error {
+	agent := r.client.Agent()
+	return agent.ServiceDeregister(r.serviceID())
 }
 
 // maintainCheck periodically hits our TTL check to keep it alive
-func maintainCheck(conf *ReplicationConfig, client *consulapi.Client, doneCh chan struct{}) error {
+func (r *Replicator) maintainCheck() error {
 	// Try to update the TTL immediately
-	agent := client.Agent()
-	checkID := checkID(conf)
+	agent := r.client.Agent()
+	checkID := r.checkID()
 	if err := agent.PassTTL(checkID, ""); err != nil {
 		return err
 	}
@@ -141,7 +149,7 @@ func maintainCheck(conf *ReplicationConfig, client *consulapi.Client, doneCh cha
 				if err := agent.PassTTL(checkID, ""); err != nil {
 					log.Printf("[ERR] Failed to update check TTL: %v", err)
 				}
-			case <-doneCh:
+			case <-r.doneCh:
 				return
 			}
 		}
@@ -149,22 +157,14 @@ func maintainCheck(conf *ReplicationConfig, client *consulapi.Client, doneCh cha
 	return nil
 }
 
-// lockValue generates a value to set for the key lock
-func lockValue(conf *ReplicationConfig) []byte {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.Encode(conf)
-	return buf.Bytes()
-}
-
 // acquireLeadership is used to wait until we are the leader in the cluster
-func acquireLeadership(conf *ReplicationConfig, client *consulapi.Client, stopCh chan struct{}) (chan struct{}, error) {
+func (r *Replicator) acquireLeadership() (chan struct{}, error) {
 	// Create a new session
-	kv := client.KV()
-	session := client.Session()
+	kv := r.client.KV()
+	session := r.client.Session()
 	se := &consulapi.SessionEntry{
-		Name:   fmt.Sprintf("Lock for %s service", conf.Service),
-		Checks: []string{checkID(conf), "serfHealth"},
+		Name:   fmt.Sprintf("Lock for %s service", r.conf.Service),
+		Checks: []string{r.checkID(), "serfHealth"},
 	}
 	id, _, err := session.Create(se, nil)
 	if err != nil {
@@ -173,8 +173,8 @@ func acquireLeadership(conf *ReplicationConfig, client *consulapi.Client, stopCh
 
 	// Construct a key to lock
 	p := &consulapi.KVPair{
-		Key:     conf.Lock,
-		Value:   lockValue(conf),
+		Key:     r.conf.Lock,
+		Value:   lockValue(r.conf),
 		Session: id,
 	}
 
@@ -182,12 +182,12 @@ func acquireLeadership(conf *ReplicationConfig, client *consulapi.Client, stopCh
 		WaitTime: 30 * time.Second,
 	}
 WAIT:
-	if shouldQuit(stopCh) {
+	if shouldQuit(r.stopCh) {
 		return nil, fmt.Errorf("Lock acquisition aborted")
 	}
 
 	// Look for an existing lock, blocking until not taken
-	pair, meta, err := kv.Get(conf.Lock, opts)
+	pair, meta, err := kv.Get(r.conf.Lock, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -202,30 +202,30 @@ WAIT:
 		return nil, err
 	}
 	if !locked {
-		log.Printf("[WARN] Failed to acquire lock on %s, sleeping", conf.Lock)
+		log.Printf("[WARN] Failed to acquire lock on %s, sleeping", r.conf.Lock)
 		select {
 		case <-time.After(5 * time.Second):
 			goto WAIT
-		case <-stopCh:
+		case <-r.stopCh:
 			return nil, fmt.Errorf("Lock acquisition aborted")
 		}
 	}
 
 	// Watch to ensure we maintain leadership
 	leaderCh := make(chan struct{})
-	go watchLock(conf, client, id, leaderCh)
+	go r.watchLock(id, leaderCh)
 
 	// Locked! All done
-	log.Printf("[INFO] Lock %s acquired", conf.Lock)
+	log.Printf("[INFO] Lock %s acquired", r.conf.Lock)
 	return leaderCh, nil
 }
 
 // watchLock watches the given key to ensure we are still the leader
-func watchLock(conf *ReplicationConfig, client *consulapi.Client, session string, stopCh chan struct{}) {
-	kv := client.KV()
+func (r *Replicator) watchLock(session string, stopCh chan struct{}) {
+	kv := r.client.KV()
 	opts := &consulapi.QueryOptions{}
 WAIT:
-	pair, meta, err := kv.Get(conf.Lock, opts)
+	pair, meta, err := kv.Get(r.conf.Lock, opts)
 	if err != nil {
 		close(stopCh)
 		log.Printf("[ERR] Stepping down, failed to watch lock: %v", err)
@@ -241,31 +241,31 @@ WAIT:
 }
 
 // replicateKeys is used to actively replicate once we are the leader
-func replicateKeys(conf *ReplicationConfig, client *consulapi.Client, leaderCh, stopCh chan struct{}) error {
+func (r *Replicator) replicateKeys(leaderCh chan struct{}) error {
 	// Read our last status
-	status, err := readStatus(conf, client)
+	status, err := readStatus(r.conf, r.client)
 	if err != nil {
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
 
-	kv := client.KV()
+	kv := r.client.KV()
 	opts := &consulapi.QueryOptions{
-		Datacenter: conf.SourceDC,
+		Datacenter: r.conf.SourceDC,
 		WaitTime:   30 * time.Second,
 	}
 WAIT:
-	if shouldQuit(leaderCh) || shouldQuit(stopCh) {
+	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
 	opts.WaitIndex = status.LastReplicated
-	pairs, qm, err := kv.List(conf.SourcePrefix, opts)
+	pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
 	if err != nil {
 		return err
 	}
 	if qm.LastIndex == status.LastReplicated {
 		goto WAIT
 	}
-	if shouldQuit(leaderCh) || shouldQuit(stopCh) {
+	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
 
@@ -273,8 +273,8 @@ WAIT:
 	updates := 0
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if conf.SourcePrefix != conf.DestinationPrefix {
-			pair.Key = strings.Replace(pair.Key, conf.SourcePrefix, conf.DestinationPrefix, 1)
+		if r.conf.SourcePrefix != r.conf.DestinationPrefix {
+			pair.Key = strings.Replace(pair.Key, r.conf.SourcePrefix, r.conf.DestinationPrefix, 1)
 		}
 		keys[pair.Key] = struct{}{}
 
@@ -289,7 +289,7 @@ WAIT:
 	}
 
 	// Handle any deletes
-	localKeys, _, err := kv.Keys(conf.DestinationPrefix, "", nil)
+	localKeys, _, err := kv.Keys(r.conf.DestinationPrefix, "", nil)
 	if err != nil {
 		return err
 	}
@@ -306,11 +306,19 @@ WAIT:
 
 	// Update our status
 	status.LastReplicated = qm.LastIndex
-	if err := writeStatus(conf, client, status); err != nil {
+	if err := writeStatus(r.conf, r.client, status); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
 	log.Printf("[INFO] Synced %d updates, %d deletes", updates, deletes)
 	goto WAIT
+}
+
+// lockValue generates a value to set for the key lock
+func lockValue(conf *ReplicationConfig) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.Encode(conf)
+	return buf.Bytes()
 }
 
 // readStatus is used to read the last replication status
