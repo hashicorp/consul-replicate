@@ -223,6 +223,11 @@ WAIT:
 
 // watchLock watches the given key to ensure we are still the leader
 func (r *Replicator) watchLock(session string, stopCh chan struct{}) {
+	defer func() {
+		if _, err := r.client.Session().Destroy(session, nil); err != nil {
+			log.Printf("[ERR] Failed to destroy session: %v", err)
+		}
+	}()
 	kv := r.client.KV()
 	opts := &consulapi.QueryOptions{}
 WAIT:
