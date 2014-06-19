@@ -1,7 +1,7 @@
 consul-replicate
 ===========
 
-consul-replicate integrates with [Consul](http://consul.io) to perform
+consul-replicate integrates with [Consul](http://www.consul.io) to perform
 cross datacenter K/V replication.
 
 This makes it possible to manage application configuration from
