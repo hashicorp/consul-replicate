@@ -18,6 +18,12 @@ to elect a single node to perform the replication and gracefully
 failover. The active replicator watches the remote datacenter for
 changes and updates the local K/V store as appropriate.
 
+However, the daemon should not be used to attempt master-master
+replication. It is not designed for this use case, and will not
+ever reach a stable point. Instead, it should be used only
+for master-slave replication, where a single datacenter is considered
+authoritative.
+
 ## Download & Usage
 
 Download a release from the
