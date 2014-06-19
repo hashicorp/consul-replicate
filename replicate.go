@@ -193,6 +193,7 @@ WAIT:
 	}
 	if pair != nil && pair.Session != "" {
 		opts.WaitIndex = meta.LastIndex
+		log.Printf("[INFO] Lock already held, watching leader")
 		goto WAIT
 	}
 
@@ -253,6 +254,7 @@ func (r *Replicator) replicateKeys(leaderCh chan struct{}) error {
 		Datacenter: r.conf.SourceDC,
 		WaitTime:   30 * time.Second,
 	}
+	log.Printf("[INFO] Watching for changes")
 WAIT:
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
