@@ -13,6 +13,9 @@ import (
 const (
 	// statusCheckpoint controls how often we write back out status
 	statusCheckpoint = 5 * time.Second
+
+	// retryInterval controls how often we retry on an error
+	retryInterval = 30 * time.Second
 )
 
 // status struct is used to checkpoint our status
@@ -68,10 +71,26 @@ ACQUIRE:
 	}
 
 	// Replicate now that we are the leader
+REPLICATE:
 	if err := replicateKeys(conf, client, leaderCh, stopCh); err != nil {
 		log.Printf("[ERR] Failed to replicate keys: %v", err)
 	}
-	goto ACQUIRE
+
+	// Check if we are still the leader
+	if shouldQuit(leaderCh) {
+		goto ACQUIRE
+	}
+
+	// Some error, back-off and retry
+	log.Printf("[INFO] Replication paused for %v", retryInterval)
+	select {
+	case <-time.After(retryInterval):
+		goto REPLICATE
+	case <-leaderCh:
+		goto ACQUIRE
+	case <-stopCh:
+		return
+	}
 }
 
 // serviceID generates an ID for the service
