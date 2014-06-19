@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/armon/consul-api"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -159,7 +160,7 @@ func acquireLeadership(conf *ReplicationConfig, client *consulapi.Client, stopCh
 	}
 
 	opts := &consulapi.QueryOptions{
-		WaitTime: 60 * time.Second,
+		WaitTime: 30 * time.Second,
 	}
 WAIT:
 	if shouldQuit(stopCh) {
@@ -228,18 +229,69 @@ func replicateKeys(conf *ReplicationConfig, client *consulapi.Client, leaderCh, 
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
 
-	for {
-		select {
-		case <-time.After(statusCheckpoint):
-			if err := writeStatus(conf, client, status); err != nil {
-				log.Printf("[ERR] Failed to checkpoint replication status: %v", err)
-			}
-		case <-leaderCh:
-			return nil
-		case <-stopCh:
-			return nil
-		}
+	kv := client.KV()
+	opts := &consulapi.QueryOptions{
+		Datacenter: conf.SourceDC,
+		WaitTime:   30 * time.Second,
 	}
+WAIT:
+	if shouldQuit(leaderCh) || shouldQuit(stopCh) {
+		return nil
+	}
+	opts.WaitIndex = status.LastReplicated
+	pairs, qm, err := kv.List(conf.SourcePrefix, opts)
+	if err != nil {
+		return err
+	}
+	if qm.LastIndex == status.LastReplicated {
+		goto WAIT
+	}
+	if shouldQuit(leaderCh) || shouldQuit(stopCh) {
+		return nil
+	}
+
+	// Update any key that recently updated
+	updates := 0
+	keys := make(map[string]struct{}, len(pairs))
+	for _, pair := range pairs {
+		if conf.SourcePrefix != conf.DestinationPrefix {
+			strings.Replace(pair.Key, conf.SourcePrefix, conf.DestinationPrefix, 1)
+		}
+		keys[pair.Key] = struct{}{}
+
+		// Ignore if the modify index is old
+		if pair.ModifyIndex <= status.LastReplicated {
+			continue
+		}
+		if _, err := kv.Put(pair, nil); err != nil {
+			return fmt.Errorf("failed to write key %s: %v", pair.Key, err)
+		}
+		updates++
+	}
+
+	// Handle any deletes
+	localKeys, _, err := kv.Keys(conf.DestinationPrefix, "", nil)
+	if err != nil {
+		return err
+	}
+	deletes := 0
+	for _, key := range localKeys {
+		if _, ok := keys[key]; ok {
+			continue
+		}
+		if _, err := kv.Delete(key, nil); err != nil {
+			return fmt.Errorf("failed to delete key %s: %v", key, err)
+		}
+		deletes++
+	}
+
+	// Update our status
+	status.LastReplicated = qm.LastIndex
+	if err := writeStatus(conf, client, status); err != nil {
+		log.Printf("[ERR] Failed to checkpoint status: %v", err)
+	}
+	log.Printf("[INFO] Synced %d updates, %d deletes", updates, deletes)
+	goto WAIT
 }
 
 // readStatus is used to read the last replication status

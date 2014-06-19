@@ -107,7 +107,7 @@ func realMain() int {
 	// Wait for clean termination, or timeout
 	select {
 	case <-doneCh:
-	case <-time.After(5 * time.Second):
+	case <-time.After(60 * time.Second):
 		log.Printf("[WARN] Timed out waiting for replication to stop")
 	}
 	return 0
