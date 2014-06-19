@@ -141,10 +141,10 @@ Options:
                         setup. Defaults to "service/consul-replicate/leader"
   -prefix=global/       Provides the prefix which is the root of replicated keys
                         in the source datacenter
-  -service              Service sets the name of the service that is registered
+  -service=name         Service sets the name of the service that is registered
                         in the catalog. Defaults to "consul-replicate"
-  -src=dc1              Provides the source destination to replicate from
-  -status=path         Status is used to provide the path in the KV store used to
+  -src=dc               Provides the source destination to replicate from
+  -status=path          Status is used to provide the path in the KV store used to
                         store our replication status. This is to checkpoint replication
-						periodically. Defaults to "service/consul-replicate/status"
+                        periodically. Defaults to "service/consul-replicate/status"
 `

@@ -264,9 +264,6 @@ WAIT:
 	if err != nil {
 		return err
 	}
-	if qm.LastIndex == status.LastReplicated {
-		goto WAIT
-	}
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
@@ -313,7 +310,9 @@ WAIT:
 	if err := writeStatus(r.conf, r.client, status); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
-	log.Printf("[INFO] Synced %d updates, %d deletes", updates, deletes)
+	if updates > 0 || deletes > 0 {
+		log.Printf("[INFO] Synced %d updates, %d deletes", updates, deletes)
+	}
 	goto WAIT
 }
 
