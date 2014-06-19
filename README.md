@@ -65,9 +65,12 @@ $ curl -X PUT -d test http://nyc1.demo.consul.io/v1/kv/global/foo
 true
 ```
 
-We should now be able to read the key from the other datacenters:
+We should now be able to read the key from all the datacenters:
 
 ```
+$ curl http://nyc1.demo.consul.io/v1/kv/global/foo
+[{"CreateIndex":21123,"ModifyIndex":21123,"LockIndex":0,"Key":"global/foo","Flags":0,"Value":"dGVzdA=="}]
+
 $ curl http://sfo1.demo.consul.io/v1/kv/global/foo
 [{"CreateIndex":21123,"ModifyIndex":21123,"LockIndex":0,"Key":"global/foo","Flags":0,"Value":"dGVzdA=="}]
 
