@@ -60,21 +60,21 @@ Options:
 
 We run a [Consul demo cluster](http://demo.consul.io) that uses
 consul-replicate to perform cross datacenter replication. Specifically,
-keys in the `global/` prefix of the NYC1 datacenter are replicated to
+keys in the `global/` prefix of the NYC3 datacenter are replicated to
 the [SFO1](http://sfo1.demo.consul.io/ui/#/sfo1/kv/) and
 [AMS2](http://ams2.demo.consul.io/ui/#/ams2/kv/) datacenters.
 
-We can test this by doing a write to NYC1:
+We can test this by doing a write to NYC3:
 
 ```
-$ curl -X PUT -d test http://nyc1.demo.consul.io/v1/kv/global/foo
+$ curl -X PUT -d test http://nyc3.demo.consul.io/v1/kv/global/foo
 true
 ```
 
 We should now be able to read the key from all the datacenters:
 
 ```
-$ curl http://nyc1.demo.consul.io/v1/kv/global/foo
+$ curl http://nyc3.demo.consul.io/v1/kv/global/foo
 [{"CreateIndex":21123,"ModifyIndex":21123,"LockIndex":0,"Key":"global/foo","Flags":0,"Value":"dGVzdA=="}]
 
 $ curl http://sfo1.demo.consul.io/v1/kv/global/foo
