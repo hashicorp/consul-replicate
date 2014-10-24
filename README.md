@@ -54,6 +54,7 @@ Options:
   -status=path          Status is used to provide the path in the KV store used to
                         store our replication status. This is to checkpoint replication
                         periodically. Defaults to "service/consul-replicate/status"
+  -token=""             Optional ACL token to use when reading and writing keys.
 ```
 
 ## Example

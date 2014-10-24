@@ -22,6 +22,7 @@ type ReplicationConfig struct {
 
 	SourcePrefix      string
 	DestinationPrefix string
+	Token             string
 
 	Lock    string
 	Status  string
@@ -40,6 +41,7 @@ func realMain() int {
 	flag.StringVar(&replConf.SourcePrefix, "prefix", "global/", "source prefix")
 	flag.StringVar(&replConf.DestinationPrefix, "dst-prefix", "", "destination prefix, defaults to source prefix")
 	flag.StringVar(&consulConf.Address, "addr", "127.0.0.1:8500", "consul HTTP API address with port")
+	flag.StringVar(&consulConf.Token, "token", "", "ACL token to use")
 	flag.StringVar(&replConf.Lock, "lock", "service/consul-replicate/leader", "Lock used for coordination")
 	flag.StringVar(&replConf.Status, "status", "service/consul-replicate/status", "Status file used for state")
 	flag.StringVar(&replConf.Service, "service", "consul-replicate", "Service used for registration")
@@ -147,4 +149,5 @@ Options:
   -status=path          Status is used to provide the path in the KV store used to
                         store our replication status. This is to checkpoint replication
                         periodically. Defaults to "service/consul-replicate/status"
+  -token=""             Optional ACL token to use when reading and writing keys.
 `
