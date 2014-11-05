@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/armon/consul-api"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/armon/consul-api"
 )
 
 const (
@@ -229,7 +230,7 @@ func (r *Replicator) watchLock(session string, stopCh chan struct{}) {
 		}
 	}()
 	kv := r.client.KV()
-	opts := &consulapi.QueryOptions{}
+	opts := &consulapi.QueryOptions{RequireConsistent: true}
 WAIT:
 	pair, meta, err := kv.Get(r.conf.Lock, opts)
 	if err != nil {
