@@ -20,9 +20,11 @@ type ReplicationConfig struct {
 
 	SourceDC string
 
-	SourcePrefix      string
-	DestinationPrefix string
-	Token             string
+	SourcePrefixRaw      string
+	DestinationPrefixRaw string
+	SourcePrefixes       []string
+	DestinationPrefixes  []string
+	Token                string
 
 	Lock    string
 	Status  string
@@ -38,8 +40,8 @@ func realMain() int {
 	replConf := &ReplicationConfig{}
 	flag.Usage = usage
 	flag.StringVar(&replConf.SourceDC, "src", "", "source datacenter")
-	flag.StringVar(&replConf.SourcePrefix, "prefix", "global/", "source prefix")
-	flag.StringVar(&replConf.DestinationPrefix, "dst-prefix", "", "destination prefix, defaults to source prefix")
+	flag.StringVar(&replConf.SourcePrefixRaw, "prefix", "global/", "source prefix")
+	flag.StringVar(&replConf.DestinationPrefixRaw, "dst-prefix", "", "destination prefix, defaults to source prefix")
 	flag.StringVar(&consulConf.Address, "addr", "127.0.0.1:8500", "consul HTTP API address with port")
 	flag.StringVar(&consulConf.Token, "token", "", "ACL token to use")
 	flag.StringVar(&replConf.Lock, "lock", "service/consul-replicate/leader", "Lock used for coordination")
@@ -66,15 +68,33 @@ func realMain() int {
 		log.Printf("[ERR] Failed to query agent: %v", err)
 		return 1
 	}
+	
 	localDC := info["Config"]["Datacenter"].(string)
 
 	// Set our name and pid
 	replConf.Name = info["Config"]["NodeName"].(string)
 	replConf.Pid = syscall.Getpid()
 
-	// Fill in the defaults
-	if replConf.DestinationPrefix == "" {
-		replConf.DestinationPrefix = replConf.SourcePrefix
+	// Slice SourcePrefixRaw and DestinationPrefixRaw strings into array
+	replConf.SourcePrefixes = strings.Split(replConf.SourcePrefixRaw, ",")
+	replConf.DestinationPrefixes = strings.Split(replConf.DestinationPrefixRaw, ",")
+
+	// If destination is empty, copy the prefixes from source
+	if len(replConf.DestinationPrefixes) == 0 {
+		copy(replConf.SourcePrefixes, replConf.DestinationPrefixes)
+	}
+
+	// Make sure the number of source prefixes matches the number of destination prefixes
+	if len(replConf.SourcePrefixes) != len(replConf.DestinationPrefixes) {
+		log.Printf("[ERR] Must provide same number of source and destination prefixes")
+		return 1
+	}
+
+	// Fill in the defaults if array size matches
+	for i, DestinationPrefix := range replConf.DestinationPrefixes {
+		if DestinationPrefix == "" {
+			replConf.DestinationPrefixes[i] = replConf.SourcePrefixes[i]
+		}
 	}
 
 	// Sanity check config
@@ -84,9 +104,9 @@ func realMain() int {
 	}
 
 	// Log what we are about to do
-	log.Printf("[INFO] Attempting to replicate from DC %s (%s) to %s (%s)",
-		replConf.SourceDC, replConf.SourcePrefix,
-		localDC, replConf.DestinationPrefix)
+	log.Printf("[INFO] Attempting to replicate from DC %s (%v) to %s (%v)",
+		replConf.SourceDC, replConf.SourcePrefixes,
+		localDC, replConf.DestinationPrefixes)
 
 	// Start replication
 	stopCh := make(chan struct{})

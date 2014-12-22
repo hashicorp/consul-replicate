@@ -266,10 +266,43 @@ WAIT:
 		return nil
 	}
 	opts.WaitIndex = status.LastReplicated
-	pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
-	if err != nil {
-		return err
+
+	pairsCh := make(chan consulapi.KVPairs, 1)
+	qmCh := make(chan *consulapi.QueryMeta, 1)
+	errorCh := make(chan error, 1)
+	indexCh := make(chan int, 1)
+	// pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// Go routines for listing KVs
+	for i := range r.conf.SourcePrefixes {
+		go func() {
+			pairs, qm, err := kv.List(r.conf.SourcePrefixes[i], opts)
+			pairsCh <- pairs
+			qmCh <- qm
+			errorCh <- err
+			indexCh <- i
+		}()	
 	}
+
+	pairs := <-pairsCh
+	qm := <-qmCh
+	err = <-errorCh
+	index := <-indexCh
+
+	// Block until a pair is received [Recievers block, so not needed?]
+	// for {
+	// 	if pairs != nil {
+	// 		break
+	// 	}
+	// }
+
+	if err != nil {
+	 	return err
+	}
+
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
@@ -278,8 +311,8 @@ WAIT:
 	updates := 0
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if r.conf.SourcePrefix != r.conf.DestinationPrefix {
-			pair.Key = strings.Replace(pair.Key, r.conf.SourcePrefix, r.conf.DestinationPrefix, 1)
+		if r.conf.SourcePrefixes[index] != r.conf.DestinationPrefixes[index] {
+			pair.Key = strings.Replace(pair.Key, r.conf.SourcePrefixes[index], r.conf.DestinationPrefixes[index], 1)
 		}
 		keys[pair.Key] = struct{}{}
 
@@ -295,7 +328,7 @@ WAIT:
 	}
 
 	// Handle any deletes
-	localKeys, _, err := kv.Keys(r.conf.DestinationPrefix, "", nil)
+	localKeys, _, err := kv.Keys(r.conf.DestinationPrefixes[index], "", nil)
 	if err != nil {
 		return err
 	}
@@ -312,7 +345,9 @@ WAIT:
 	}
 
 	// Update our status
-	status.LastReplicated = qm.LastIndex
+	if qm.LastIndex > status.LastReplicated {
+		status.LastReplicated = qm.LastIndex
+	}
 	if err := writeStatus(r.conf, r.client, status); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
