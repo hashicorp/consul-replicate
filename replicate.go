@@ -271,26 +271,28 @@ WAIT:
 	qmCh := make(chan *consulapi.QueryMeta, 1)
 	errorCh := make(chan error, 1)
 	indexCh := make(chan int, 1)
-	// pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
-	// if err != nil {
-	// 	return err
-	// }
 
 	// Go routines for listing KVs
 	for i := range r.conf.SourcePrefixes {
-		go func() {
+		go func(i int) {
 			pairs, qm, err := kv.List(r.conf.SourcePrefixes[i], opts)
 			pairsCh <- pairs
 			qmCh <- qm
 			errorCh <- err
 			indexCh <- i
-		}()	
+			log.Printf("[TEMP DEBUG]   -- prefix -- : %v", r.conf.SourcePrefixes[i])
+			log.Printf("[TEMP DEBUG] pairs to return: %v", pairs)
+			log.Printf("[TEMP DEBUG] index to return: %d", i)
+		}(i)	
 	}
 
 	pairs := <-pairsCh
 	qm := <-qmCh
 	err = <-errorCh
 	index := <-indexCh
+
+	log.Printf("[TEMP DEBUG] pairs: %v", pairs)
+	log.Printf("[TEMP DEBUG] index: %d", index)
 
 	// Block until a pair is received [Recievers block, so not needed?]
 	// for {
@@ -352,7 +354,7 @@ WAIT:
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
 	if updates > 0 || deletes > 0 {
-		log.Printf("[INFO] Synced %d updates, %d deletes", updates, deletes)
+		log.Printf("[INFO] Synced %d updates, %d deletes deletes from %s", updates, deletes, r.conf.SourcePrefixes[index])
 	}
 	goto WAIT
 }
