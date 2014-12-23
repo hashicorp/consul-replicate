@@ -157,12 +157,15 @@ Options:
   -addr=127.0.0.1:8500  Provides the HTTP address of a Consul agent.
   -dst-prefix=global/   Provides the prefix which is the root of replicated keys
                         in the destination datacenter. Defaults to match source.
+                        If multiple prefixes are provided, the number of destination
+                        prefixes and source prefixes provided must match.
   -lock=path            Lock is used to provide the path in the KV store used to
                         perform leader election for the replicators. This ensures
                         a single replicator running per-DC in a high-availability
                         setup. Defaults to "service/consul-replicate/leader"
   -prefix=global/       Provides the prefix which is the root of replicated keys
-                        in the source datacenter
+                        in the source datacenter. It can also take multiple 
+                        comma-separated prefixes.
   -service=name         Service sets the name of the service that is registered
                         in the catalog. Defaults to "consul-replicate"
   -src=dc               Provides the source destination to replicate from
