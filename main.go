@@ -80,8 +80,10 @@ func realMain() int {
 	replConf.DestinationPrefixes = strings.Split(replConf.DestinationPrefixRaw, ",")
 
 	// If destination is empty, copy the prefixes from source
-	if len(replConf.DestinationPrefixes) == 0 {
-		copy(replConf.SourcePrefixes, replConf.DestinationPrefixes)
+	log.Printf("[TEMP DEBUG] length of DestinationPrefixes:%d", len(replConf.DestinationPrefixRaw))
+	if len(replConf.DestinationPrefixRaw) == 0 {
+		replConf.DestinationPrefixes = replConf.SourcePrefixes
+		log.Printf("[TEMP DEBUG] Copied source prefix to destination prefix")
 	}
 
 	// Make sure the number of source prefixes matches the number of destination prefixes
