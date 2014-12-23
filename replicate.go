@@ -280,9 +280,6 @@ WAIT:
 			qmCh <- qm
 			errorCh <- err
 			indexCh <- i
-			log.Printf("[TEMP DEBUG]   -- prefix -- : %v", r.conf.SourcePrefixes[i])
-			log.Printf("[TEMP DEBUG] pairs to return: %v", pairs)
-			log.Printf("[TEMP DEBUG] index to return: %d", i)
 		}(i)	
 	}
 
@@ -290,16 +287,6 @@ WAIT:
 	qm := <-qmCh
 	err = <-errorCh
 	index := <-indexCh
-
-	log.Printf("[TEMP DEBUG] pairs: %v", pairs)
-	log.Printf("[TEMP DEBUG] index: %d", index)
-
-	// Block until a pair is received [Recievers block, so not needed?]
-	// for {
-	// 	if pairs != nil {
-	// 		break
-	// 	}
-	// }
 
 	if err != nil {
 	 	return err
