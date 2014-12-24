@@ -93,7 +93,7 @@ $ curl http://ams2.demo.consul.io/v1/kv/global/foo
 Destination prefixes will match source prefixes:
 
 ```
-./consul-replicate -src dc1 -prefix global/,web/
+./consul-replicate -src=dc1 -prefix=global/,web/
 ```
 
 Destination prefixes provided:
@@ -105,7 +105,7 @@ Destination prefixes provided:
 | source  | destination  |
 |---------|--------------|
 | global/ | global_dc2/  |
-| web/    | web_dec2/    |
+| web/    | web_dc2/     |
 
 
 Destination prefixes provided partially:
