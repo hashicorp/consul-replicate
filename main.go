@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/armon/consul-api"
+	consulapi "github.com/hashicorp/consul/api"
 )
 
 type ReplicationConfig struct {
