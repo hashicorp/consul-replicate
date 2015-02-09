@@ -266,7 +266,7 @@ WAIT:
 		return nil
 	}
 	opts.WaitIndex = status.LastReplicated
-	pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
+	pairs, qm, err := kv.List(r.conf.Prefixes[0].SourcePrefix, opts)
 	if err != nil {
 		return err
 	}
@@ -278,8 +278,8 @@ WAIT:
 	updates := 0
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if r.conf.SourcePrefix != r.conf.DestinationPrefix {
-			pair.Key = strings.Replace(pair.Key, r.conf.SourcePrefix, r.conf.DestinationPrefix, 1)
+		if r.conf.Prefixes[0].SourcePrefix != r.conf.Prefixes[0].DestinationPrefix {
+			pair.Key = strings.Replace(pair.Key, r.conf.Prefixes[0].SourcePrefix, r.conf.Prefixes[0].DestinationPrefix, 1)
 		}
 		keys[pair.Key] = struct{}{}
 
@@ -295,7 +295,7 @@ WAIT:
 	}
 
 	// Handle any deletes
-	localKeys, _, err := kv.Keys(r.conf.DestinationPrefix, "", nil)
+	localKeys, _, err := kv.Keys(r.conf.Prefixes[0].DestinationPrefix, "", nil)
 	if err != nil {
 		return err
 	}
@@ -333,7 +333,7 @@ func lockValue(conf *ReplicationConfig) []byte {
 // readStatus is used to read the last replication status
 func readStatus(conf *ReplicationConfig, client *consulapi.Client) (*status, error) {
 	kv := client.KV()
-	pair, _, err := kv.Get(conf.Status, nil)
+	pair, _, err := kv.Get(conf.Prefixes[0].Status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func writeStatus(conf *ReplicationConfig, client *consulapi.Client, status *stat
 
 	// Create the KVPair
 	pair := &consulapi.KVPair{
-		Key:   conf.Status,
+		Key:   conf.Prefixes[0].Status,
 		Value: buf.Bytes(),
 	}
 	kv := client.KV()
