@@ -24,6 +24,9 @@ type status struct {
 	LastReplicated uint64
 }
 
+// Statuses for all source prefixes
+type statuses []*status
+
 // shouldQuit is used to check if a stop channel is closed
 func shouldQuit(stopCh chan struct{}) bool {
 	select {
@@ -66,6 +69,54 @@ func (r *Replicator) run() {
 		return
 	}
 
+// ACQUIRE:
+// 	// Re-check if we should exit
+// 	if shouldQuit(r.stopCh) {
+// 		return
+// 	}
+
+// 	// Acquire leadership for this
+// 	leaderCh, err := r.acquireLeadership()
+// 	if err != nil {
+// 		log.Printf("[ERR] Failed to acquire leadership: %v", err)
+// 		return
+// 	}
+
+// 	// Replicate now that we are the leader
+// REPLICATE:
+// 	if err := r.replicateKeys(leaderCh); err != nil {
+// 		log.Printf("[ERR] Failed to replicate keys: %v", err)
+// 	}
+
+// 	// Check if we are still the leader
+// 	if shouldQuit(leaderCh) {
+// 		goto ACQUIRE
+// 	}
+
+// 	// Some error, back-off and retry
+// 	log.Printf("[INFO] Replication paused for %v", retryInterval)
+// 	select {
+// 	case <-time.After(retryInterval):
+// 		goto REPLICATE
+// 	case <-leaderCh:
+// 		goto ACQUIRE
+// 	case <-r.stopCh:
+// 		return
+// 	}
+
+	/************** New code ****************/
+
+	// Go routine on replicate for each source prefix
+	doneCh := make(chan bool, 1)
+	go replicateRoutine (r, doneCh) 
+
+	//Block until quit or error
+	<- doneCh
+}
+
+
+
+func replicateRoutine(r *Replicator, doneCh chan bool) {
 ACQUIRE:
 	// Re-check if we should exit
 	if shouldQuit(r.stopCh) {
@@ -79,7 +130,6 @@ ACQUIRE:
 		return
 	}
 
-	// Replicate now that we are the leader
 REPLICATE:
 	if err := r.replicateKeys(leaderCh); err != nil {
 		log.Printf("[ERR] Failed to replicate keys: %v", err)
@@ -87,7 +137,7 @@ REPLICATE:
 
 	// Check if we are still the leader
 	if shouldQuit(leaderCh) {
-		goto ACQUIRE
+		doneCh <- true
 	}
 
 	// Some error, back-off and retry
@@ -98,7 +148,7 @@ REPLICATE:
 	case <-leaderCh:
 		goto ACQUIRE
 	case <-r.stopCh:
-		return
+		doneCh <- true
 	}
 }
 

@@ -58,17 +58,19 @@ func main() {
 	os.Exit(realMain())
 }
 
+// Note: sourcePrefixes has no default value
+
 func realMain() int {
 	consulConf := consulapi.DefaultConfig()
 	replConf := &ReplicationConfig{}
 	flag.Usage = usage
 	flag.StringVar(&replConf.SourceDC, "src", "", "source datacenter")
 	flag.Var(&sourcePrefixes, "src-prefixes", "source prefixes")
-	flag.Var(&destinationPrefixes, "dst-prefixes", "destination prefixes, defaults to source prefix")
+	flag.Var(&destinationPrefixes, "dst-prefixes", "destination prefixes, defaults to source prefixes")
 	flag.StringVar(&consulConf.Address, "addr", "127.0.0.1:8500", "consul HTTP API address with port")
 	flag.StringVar(&consulConf.Token, "token", "", "ACL token to use")
 	flag.StringVar(&replConf.Lock, "lock", "service/consul-replicate/leader", "Lock used for coordination")
-	flag.StringVar(&statusRoot, "status", "service/consul-replicate/status", "Root status file used for state")
+	flag.StringVar(&statusRoot, "status", "service/consul-replicate/status", "Root status file per source prefix used for state")
 	flag.StringVar(&replConf.Service, "service", "consul-replicate", "Service used for registration")
 	flag.Parse()
 
@@ -97,6 +99,11 @@ func realMain() int {
 	replConf.Name = info["Config"]["NodeName"].(string)
 	replConf.Pid = syscall.Getpid()
 
+	// If source prefixes were not provided, default to using global/
+	if len(sourcePrefixes) == 0 {
+		sourcePrefixes = append(sourcePrefixes, "global/")
+	}
+
 	// If destination prefixes were not provided copy it from source prefixes
 	if len(destinationPrefixes) == 0 {
 		destinationPrefixes = sourcePrefixes
@@ -117,6 +124,9 @@ func realMain() int {
 		pConfig := PrefixConfig { sourcePrefixes[i], destinationPrefixes[i], statusRoot + "/" + strings.TrimSuffix(sourcePrefixes[i], "/") }
 		replConf.Prefixes = append(replConf.Prefixes, &pConfig)
 	}
+
+	log.Printf("These are the prefixes: %v", replConf.Prefixes)
+	// log.Printf("These are the prefix statuses: %s", replConf.Prefixes.Status)
 
 	// Sanity check config
 	if replConf.SourceDC == localDC {
