@@ -42,7 +42,7 @@ type Replicator struct {
 	doneCh chan struct{}
 }
 
-// replicate is a long running routine that manages replication.
+// replicateRoutine is a long running routine that manages replication.
 // The stopCh is used to signal we should terminate, and the doneCh is closed
 // when we finish
 func (r *Replicator) run() {
@@ -79,26 +79,42 @@ ACQUIRE:
 		return
 	}
 
-	// Replicate now that we are the leader
-REPLICATE:
-	if err := r.replicateKeys(leaderCh); err != nil {
-		log.Printf("[ERR] Failed to replicate keys: %v", err)
+	// Go routine on replicate for each source prefix
+	// If leadership is lost, back out of all routines and restart
+	doneCh := make(chan bool, 1)
+	for i := range r.conf.Prefixes {
+		go replicateRoutine (r, doneCh, leaderCh, i) 
 	}
 
-	// Check if we are still the leader
-	if shouldQuit(leaderCh) {
+	//Block until quit or error
+	shouldQuit := <- doneCh
+	if shouldQuit {
+		return
+	} else {
 		goto ACQUIRE
+	}
+}
+
+func replicateRoutine(r *Replicator, doneCh chan bool, leaderCh chan struct{}, i int) {
+REPLICATE:
+	if err := r.replicateKeys(leaderCh, i); err != nil {
+		log.Printf("[ERR] Failed to replicate keys from %s: %v", r.conf.Prefixes[i].SourcePrefix, err)
+	}
+
+	// Check if we are still the leader, end routine if leadership is lost
+	if shouldQuit(leaderCh) {
+		doneCh <- false
 	}
 
 	// Some error, back-off and retry
-	log.Printf("[INFO] Replication paused for %v", retryInterval)
+	log.Printf("[INFO] Replication from %s paused for %v", r.conf.Prefixes[i].SourcePrefix, retryInterval)
 	select {
 	case <-time.After(retryInterval):
 		goto REPLICATE
 	case <-leaderCh:
-		goto ACQUIRE
+		doneCh <- false
 	case <-r.stopCh:
-		return
+		doneCh <- true
 	}
 }
 
@@ -248,9 +264,10 @@ WAIT:
 }
 
 // replicateKeys is used to actively replicate once we are the leader
-func (r *Replicator) replicateKeys(leaderCh chan struct{}) error {
+func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 	// Read our last status
-	status, err := readStatus(r.conf, r.client)
+	status, err := readStatus(r.conf, r.client, i)
+	log.Printf("[DEBUG] Read status from %s: %d", r.conf.Prefixes[i].SourcePrefix, status.LastReplicated)
 	if err != nil {
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
@@ -260,13 +277,13 @@ func (r *Replicator) replicateKeys(leaderCh chan struct{}) error {
 		Datacenter: r.conf.SourceDC,
 		WaitTime:   30 * time.Second,
 	}
-	log.Printf("[INFO] Watching for changes")
+	log.Printf("[INFO] Watching for changes on %s", r.conf.Prefixes[i].SourcePrefix)
 WAIT:
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
 	opts.WaitIndex = status.LastReplicated
-	pairs, qm, err := kv.List(r.conf.SourcePrefix, opts)
+	pairs, qm, err := kv.List(r.conf.Prefixes[i].SourcePrefix, opts)
 	if err != nil {
 		return err
 	}
@@ -278,8 +295,8 @@ WAIT:
 	updates := 0
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if r.conf.SourcePrefix != r.conf.DestinationPrefix {
-			pair.Key = strings.Replace(pair.Key, r.conf.SourcePrefix, r.conf.DestinationPrefix, 1)
+		if r.conf.Prefixes[i].SourcePrefix != r.conf.Prefixes[i].DestinationPrefix {
+			pair.Key = strings.Replace(pair.Key, r.conf.Prefixes[i].SourcePrefix, r.conf.Prefixes[i].DestinationPrefix, 1)
 		}
 		keys[pair.Key] = struct{}{}
 
@@ -295,7 +312,7 @@ WAIT:
 	}
 
 	// Handle any deletes
-	localKeys, _, err := kv.Keys(r.conf.DestinationPrefix, "", nil)
+	localKeys, _, err := kv.Keys(r.conf.Prefixes[i].DestinationPrefix, "", nil)
 	if err != nil {
 		return err
 	}
@@ -313,7 +330,7 @@ WAIT:
 
 	// Update our status
 	status.LastReplicated = qm.LastIndex
-	if err := writeStatus(r.conf, r.client, status); err != nil {
+	if err := writeStatus(r.conf, r.client, status, i); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
 	if updates > 0 || deletes > 0 {
@@ -331,9 +348,9 @@ func lockValue(conf *ReplicationConfig) []byte {
 }
 
 // readStatus is used to read the last replication status
-func readStatus(conf *ReplicationConfig, client *consulapi.Client) (*status, error) {
+func readStatus(conf *ReplicationConfig, client *consulapi.Client, i int) (*status, error) {
 	kv := client.KV()
-	pair, _, err := kv.Get(conf.Status, nil)
+	pair, _, err := kv.Get(conf.Prefixes[i].Status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -348,14 +365,14 @@ func readStatus(conf *ReplicationConfig, client *consulapi.Client) (*status, err
 }
 
 // writeStatus is used to update the last replication status
-func writeStatus(conf *ReplicationConfig, client *consulapi.Client, status *status) error {
+func writeStatus(conf *ReplicationConfig, client *consulapi.Client, status *status, i int) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.Encode(status)
 
 	// Create the KVPair
 	pair := &consulapi.KVPair{
-		Key:   conf.Status,
+		Key:   conf.Prefixes[i].Status,
 		Value: buf.Bytes(),
 	}
 	kv := client.KV()
