@@ -66,43 +66,6 @@ func (r *Replicator) run() {
 		return
 	}
 
-// ACQUIRE:
-// 	// Re-check if we should exit
-// 	if shouldQuit(r.stopCh) {
-// 		return
-// 	}
-
-// 	// Acquire leadership for this
-// 	leaderCh, err := r.acquireLeadership()
-// 	if err != nil {
-// 		log.Printf("[ERR] Failed to acquire leadership: %v", err)
-// 		return
-// 	}
-
-// 	// Replicate now that we are the leader
-// REPLICATE:
-// 	if err := r.replicateKeys(leaderCh); err != nil {
-// 		log.Printf("[ERR] Failed to replicate keys: %v", err)
-// 	}
-
-// 	// Check if we are still the leader
-// 	if shouldQuit(leaderCh) {
-// 		goto ACQUIRE
-// 	}
-
-// 	// Some error, back-off and retry
-// 	log.Printf("[INFO] Replication paused for %v", retryInterval)
-// 	select {
-// 	case <-time.After(retryInterval):
-// 		goto REPLICATE
-// 	case <-leaderCh:
-// 		goto ACQUIRE
-// 	case <-r.stopCh:
-// 		return
-// 	}
-
-	/************** New code ****************/
-
 ACQUIRE:
 	// Re-check if we should exit
 	if shouldQuit(r.stopCh) {
