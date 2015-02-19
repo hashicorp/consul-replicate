@@ -64,9 +64,9 @@ func realMain() int {
 	consulConf := consulapi.DefaultConfig()
 	replConf := &ReplicationConfig{}
 	flag.Usage = usage
-	flag.StringVar(&replConf.SourceDC, "src", "", "source datacenter")
-	flag.Var(&sourcePrefixes, "src-prefixes", "source prefixes")
-	flag.Var(&destinationPrefixes, "dst-prefixes", "destination prefixes, defaults to source prefixes")
+	flag.StringVar(&replConf.SourceDC, "src", "", "Source datacenter")
+	flag.Var(&sourcePrefixes, "src-prefixes", "Source prefixes, defaults to global/")
+	flag.Var(&destinationPrefixes, "dst-prefixes", "Destination prefixes, defaults to source prefixes")
 	flag.StringVar(&consulConf.Address, "addr", "127.0.0.1:8500", "consul HTTP API address with port")
 	flag.StringVar(&consulConf.Token, "token", "", "ACL token to use")
 	flag.StringVar(&replConf.Lock, "lock", "service/consul-replicate/leader", "Lock used for coordination")
@@ -115,7 +115,6 @@ func realMain() int {
 		return 1
 	}
 
-	// TODO: Parse sourcePrefixes and destinationPrefixes to replConf
 	for i, _ := range sourcePrefixes {
 		// If destination prefix is empty, assign it the same as source prefix
 		if destinationPrefixes[i] == "" {
@@ -124,10 +123,6 @@ func realMain() int {
 		pConfig := PrefixConfig { sourcePrefixes[i], destinationPrefixes[i], statusRoot + "/" + strings.TrimSuffix(sourcePrefixes[i], "/") }
 		replConf.Prefixes = append(replConf.Prefixes, &pConfig)
 	}
-
-	for i := range replConf.Prefixes
-	log.Printf("[DEBUG] These are the prefixes: %v", replConf.Prefixes)
-	// log.Printf("These are the prefix statuses: %s", replConf.Prefixes.Status)
 
 	// Sanity check config
 	if replConf.SourceDC == localDC {
@@ -187,18 +182,18 @@ Usage: %s [options]
 Options:
 
   -addr=127.0.0.1:8500  Provides the HTTP address of a Consul agent.
-  -dst-prefix=global/   Provides the prefix which is the root of replicated keys
+  -dst-prefixes=global/ Provides the prefix which is the root of replicated keys
                         in the destination datacenter. Defaults to match source.
   -lock=path            Lock is used to provide the path in the KV store used to
                         perform leader election for the replicators. This ensures
                         a single replicator running per-DC in a high-availability
                         setup. Defaults to "service/consul-replicate/leader"
-  -prefix=global/       Provides the prefix which is the root of replicated keys
+  -src-prefixes=global/ Provides the prefix which is the root of replicated keys
                         in the source datacenter
   -service=name         Service sets the name of the service that is registered
                         in the catalog. Defaults to "consul-replicate"
   -src=dc               Provides the source destination to replicate from
-  -status=path          Status is used to provide the path in the KV store used to
+  -status=path          Status is used to provide the root path in the KV store used to
                         store our replication status. This is to checkpoint replication
                         periodically. Defaults to "service/consul-replicate/status"
   -token=""             Optional ACL token to use when reading and writing keys.

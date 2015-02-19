@@ -21,11 +21,8 @@ const (
 
 // status struct is used to checkpoint our status
 type status struct {
-	SourcePrefix string
 	LastReplicated uint64
 }
-
-var statusLR map[string]uint64
 
 // shouldQuit is used to check if a stop channel is closed
 func shouldQuit(stopCh chan struct{}) bool {
@@ -45,7 +42,7 @@ type Replicator struct {
 	doneCh chan struct{}
 }
 
-// replicate is a long running routine that manages replication.
+// replicateRoutine is a long running routine that manages replication.
 // The stopCh is used to signal we should terminate, and the doneCh is closed
 // when we finish
 func (r *Replicator) run() {
