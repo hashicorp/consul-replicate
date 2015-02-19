@@ -125,7 +125,8 @@ func realMain() int {
 		replConf.Prefixes = append(replConf.Prefixes, &pConfig)
 	}
 
-	log.Printf("These are the prefixes: %v", replConf.Prefixes)
+	for i := range replConf.Prefixes
+	log.Printf("[DEBUG] These are the prefixes: %v", replConf.Prefixes)
 	// log.Printf("These are the prefix statuses: %s", replConf.Prefixes.Status)
 
 	// Sanity check config

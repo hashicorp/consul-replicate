@@ -25,8 +25,6 @@ type status struct {
 	LastReplicated uint64
 }
 
-type statuses []*status
-
 var statusLR map[string]uint64
 
 // shouldQuit is used to check if a stop channel is closed
@@ -141,7 +139,7 @@ ACQUIRE:
 func replicateRoutine(r *Replicator, doneCh chan bool, leaderCh chan struct{}, i int) {
 REPLICATE:
 	if err := r.replicateKeys(leaderCh, i); err != nil {
-		log.Printf("[ERR] Failed to replicate keys: %v", err)
+		log.Printf("[ERR] Failed to replicate keys from %s: %v", r.conf.Prefixes[i].SourcePrefix, err)
 	}
 
 	// Check if we are still the leader, end routine if leadership is lost
@@ -150,7 +148,7 @@ REPLICATE:
 	}
 
 	// Some error, back-off and retry
-	log.Printf("[INFO] Replication paused for %v", retryInterval)
+	log.Printf("[INFO] Replication from %s paused for %v", r.conf.Prefixes[i].SourcePrefix, retryInterval)
 	select {
 	case <-time.After(retryInterval):
 		goto REPLICATE
@@ -310,7 +308,7 @@ WAIT:
 func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 	// Read our last status
 	status, err := readStatus(r.conf, r.client, i)
-	log.Printf("[INFO] Read status from %s: %d", r.conf.Prefixes[i].SourcePrefix, status.LastReplicated)
+	log.Printf("[DEBUG] Read status from %s: %d", r.conf.Prefixes[i].SourcePrefix, status.LastReplicated)
 	if err != nil {
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
