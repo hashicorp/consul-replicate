@@ -24,8 +24,7 @@ type status struct {
 	LastReplicated uint64
 }
 
-// Statuses for all source prefixes
-type statuses []*status
+var statusLR map[string]uint64
 
 // shouldQuit is used to check if a stop channel is closed
 func shouldQuit(stopCh chan struct{}) bool {
@@ -106,19 +105,6 @@ func (r *Replicator) run() {
 
 	/************** New code ****************/
 
-	// Go routine on replicate for each source prefix
-	doneCh := make(chan bool, 1)
-	for i := range r.conf.Prefixes {
-		go replicateRoutine (r, doneCh, i) 
-	}
-
-	//Block until quit or error
-	<- doneCh
-}
-
-
-
-func replicateRoutine(r *Replicator, doneCh chan bool, i int) {
 ACQUIRE:
 	// Re-check if we should exit
 	if shouldQuit(r.stopCh) {
@@ -132,14 +118,32 @@ ACQUIRE:
 		return
 	}
 
+	//If leadership is lost, back out of all routines and restart
+
+	// Go routine on replicate for each source prefix
+	doneCh := make(chan bool, 1)
+	for i := range r.conf.Prefixes {
+		go replicateRoutine (r, doneCh, leaderCh, i) 
+	}
+
+	//Block until quit or error
+	//shouldQuit := <- doneCh
+	if <- doneCh {
+		return
+	} else {
+		goto ACQUIRE
+	}
+}
+
+func replicateRoutine(r *Replicator, doneCh chan bool, leaderCh chan struct{}, i int) {
 REPLICATE:
 	if err := r.replicateKeys(leaderCh, i); err != nil {
 		log.Printf("[ERR] Failed to replicate keys: %v", err)
 	}
 
-	// Check if we are still the leader
+	// Check if we are still the leader, end routine if leadership is lost
 	if shouldQuit(leaderCh) {
-		doneCh <- true
+		doneCh <- false
 	}
 
 	// Some error, back-off and retry
@@ -148,7 +152,7 @@ REPLICATE:
 	case <-time.After(retryInterval):
 		goto REPLICATE
 	case <-leaderCh:
-		goto ACQUIRE
+		doneCh <- false
 	case <-r.stopCh:
 		doneCh <- true
 	}
@@ -302,7 +306,7 @@ WAIT:
 // replicateKeys is used to actively replicate once we are the leader
 func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 	// Read our last status
-	status, err := readStatus(r.conf, r.client)
+	status, err := readStatus(r.conf, r.client, i)
 	if err != nil {
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
@@ -317,7 +321,7 @@ WAIT:
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
-	opts.WaitIndex = status.LastReplicated
+	opts.WaitIndex = statusLR[r.conf.Prefixes[i].SourcePrefix] // status.LastReplicated
 	pairs, qm, err := kv.List(r.conf.Prefixes[i].SourcePrefix, opts)
 	if err != nil {
 		return err
@@ -336,7 +340,7 @@ WAIT:
 		keys[pair.Key] = struct{}{}
 
 		// Ignore if the modify index is old
-		if pair.ModifyIndex <= status.LastReplicated {
+		if pair.ModifyIndex <= statusLR[r.conf.Prefixes[i].SourcePrefix] { // status.LastReplicated {
 			continue
 		}
 		if _, err := kv.Put(pair, nil); err != nil {
@@ -364,8 +368,9 @@ WAIT:
 	}
 
 	// Update our status
-	status.LastReplicated = qm.LastIndex
-	if err := writeStatus(r.conf, r.client, status); err != nil {
+	// status.LastReplicated = qm.LastIndex
+	statusLR[r.conf.Prefixes[i].SourcePrefix] = qm.LastIndex// 
+	if err := writeStatus(r.conf, r.client, status, i); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
 	if updates > 0 || deletes > 0 {
@@ -383,9 +388,9 @@ func lockValue(conf *ReplicationConfig) []byte {
 }
 
 // readStatus is used to read the last replication status
-func readStatus(conf *ReplicationConfig, client *consulapi.Client) (*status, error) {
+func readStatus(conf *ReplicationConfig, client *consulapi.Client, i int) (*status, error) {
 	kv := client.KV()
-	pair, _, err := kv.Get(conf.Prefixes[0].Status, nil)
+	pair, _, err := kv.Get(conf.Prefixes[i].Status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -400,14 +405,14 @@ func readStatus(conf *ReplicationConfig, client *consulapi.Client) (*status, err
 }
 
 // writeStatus is used to update the last replication status
-func writeStatus(conf *ReplicationConfig, client *consulapi.Client, status *status) error {
+func writeStatus(conf *ReplicationConfig, client *consulapi.Client, status *status, i int) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.Encode(status)
 
 	// Create the KVPair
 	pair := &consulapi.KVPair{
-		Key:   conf.Prefixes[0].Status,
+		Key:   conf.Prefixes[i].Status,
 		Value: buf.Bytes(),
 	}
 	kv := client.KV()
