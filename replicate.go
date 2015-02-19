@@ -79,9 +79,8 @@ ACQUIRE:
 		return
 	}
 
-	//If leadership is lost, back out of all routines and restart
-
 	// Go routine on replicate for each source prefix
+	// If leadership is lost, back out of all routines and restart
 	doneCh := make(chan bool, 1)
 	for i := range r.conf.Prefixes {
 		go replicateRoutine (r, doneCh, leaderCh, i) 
