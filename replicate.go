@@ -108,7 +108,9 @@ func (r *Replicator) run() {
 
 	// Go routine on replicate for each source prefix
 	doneCh := make(chan bool, 1)
-	go replicateRoutine (r, doneCh) 
+	for i := range r.conf.Prefixes {
+		go replicateRoutine (r, doneCh, i) 
+	}
 
 	//Block until quit or error
 	<- doneCh
@@ -116,7 +118,7 @@ func (r *Replicator) run() {
 
 
 
-func replicateRoutine(r *Replicator, doneCh chan bool) {
+func replicateRoutine(r *Replicator, doneCh chan bool, i int) {
 ACQUIRE:
 	// Re-check if we should exit
 	if shouldQuit(r.stopCh) {
@@ -131,7 +133,7 @@ ACQUIRE:
 	}
 
 REPLICATE:
-	if err := r.replicateKeys(leaderCh); err != nil {
+	if err := r.replicateKeys(leaderCh, i); err != nil {
 		log.Printf("[ERR] Failed to replicate keys: %v", err)
 	}
 
@@ -298,7 +300,7 @@ WAIT:
 }
 
 // replicateKeys is used to actively replicate once we are the leader
-func (r *Replicator) replicateKeys(leaderCh chan struct{}) error {
+func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 	// Read our last status
 	status, err := readStatus(r.conf, r.client)
 	if err != nil {
@@ -316,7 +318,7 @@ WAIT:
 		return nil
 	}
 	opts.WaitIndex = status.LastReplicated
-	pairs, qm, err := kv.List(r.conf.Prefixes[0].SourcePrefix, opts)
+	pairs, qm, err := kv.List(r.conf.Prefixes[i].SourcePrefix, opts)
 	if err != nil {
 		return err
 	}
@@ -328,8 +330,8 @@ WAIT:
 	updates := 0
 	keys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if r.conf.Prefixes[0].SourcePrefix != r.conf.Prefixes[0].DestinationPrefix {
-			pair.Key = strings.Replace(pair.Key, r.conf.Prefixes[0].SourcePrefix, r.conf.Prefixes[0].DestinationPrefix, 1)
+		if r.conf.Prefixes[i].SourcePrefix != r.conf.Prefixes[i].DestinationPrefix {
+			pair.Key = strings.Replace(pair.Key, r.conf.Prefixes[i].SourcePrefix, r.conf.Prefixes[i].DestinationPrefix, 1)
 		}
 		keys[pair.Key] = struct{}{}
 
@@ -345,7 +347,7 @@ WAIT:
 	}
 
 	// Handle any deletes
-	localKeys, _, err := kv.Keys(r.conf.Prefixes[0].DestinationPrefix, "", nil)
+	localKeys, _, err := kv.Keys(r.conf.Prefixes[i].DestinationPrefix, "", nil)
 	if err != nil {
 		return err
 	}
