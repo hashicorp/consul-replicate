@@ -21,8 +21,11 @@ const (
 
 // status struct is used to checkpoint our status
 type status struct {
+	SourcePrefix string
 	LastReplicated uint64
 }
+
+type statuses []*status
 
 var statusLR map[string]uint64
 
@@ -127,8 +130,8 @@ ACQUIRE:
 	}
 
 	//Block until quit or error
-	//shouldQuit := <- doneCh
-	if <- doneCh {
+	shouldQuit := <- doneCh
+	if shouldQuit {
 		return
 	} else {
 		goto ACQUIRE
@@ -307,6 +310,7 @@ WAIT:
 func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 	// Read our last status
 	status, err := readStatus(r.conf, r.client, i)
+	log.Printf("[INFO] Read status from %s: %d", r.conf.Prefixes[i].SourcePrefix, status.LastReplicated)
 	if err != nil {
 		return fmt.Errorf("failed to read replication status: %v", err)
 	}
@@ -316,12 +320,12 @@ func (r *Replicator) replicateKeys(leaderCh chan struct{}, i int) error {
 		Datacenter: r.conf.SourceDC,
 		WaitTime:   30 * time.Second,
 	}
-	log.Printf("[INFO] Watching for changes")
+	log.Printf("[INFO] Watching for changes on %s", r.conf.Prefixes[i].SourcePrefix)
 WAIT:
 	if shouldQuit(leaderCh) || shouldQuit(r.stopCh) {
 		return nil
 	}
-	opts.WaitIndex = statusLR[r.conf.Prefixes[i].SourcePrefix] // status.LastReplicated
+	opts.WaitIndex = status.LastReplicated
 	pairs, qm, err := kv.List(r.conf.Prefixes[i].SourcePrefix, opts)
 	if err != nil {
 		return err
@@ -340,7 +344,7 @@ WAIT:
 		keys[pair.Key] = struct{}{}
 
 		// Ignore if the modify index is old
-		if pair.ModifyIndex <= statusLR[r.conf.Prefixes[i].SourcePrefix] { // status.LastReplicated {
+		if pair.ModifyIndex <= status.LastReplicated {
 			continue
 		}
 		if _, err := kv.Put(pair, nil); err != nil {
@@ -368,8 +372,7 @@ WAIT:
 	}
 
 	// Update our status
-	// status.LastReplicated = qm.LastIndex
-	statusLR[r.conf.Prefixes[i].SourcePrefix] = qm.LastIndex// 
+	status.LastReplicated = qm.LastIndex
 	if err := writeStatus(r.conf, r.client, status, i); err != nil {
 		log.Printf("[ERR] Failed to checkpoint status: %v", err)
 	}
