@@ -11,6 +11,22 @@ import (
 	consulapi "github.com/hashicorp/consul/api"
 )
 
+// TODO: tmp to compile
+type ReplicationConfig struct {
+	Name string
+	Pid  int
+
+	SourceDC string
+
+	SourcePrefix      string
+	DestinationPrefix string
+	Token             string
+
+	Lock    string
+	Status  string
+	Service string
+}
+
 const (
 	// statusCheckpoint controls how often we write back out status
 	statusCheckpoint = 5 * time.Second
