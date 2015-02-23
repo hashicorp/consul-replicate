@@ -21,4 +21,8 @@ _testmain.go
 
 *.exe
 *.test
-consul-replicate
+.proc
+*.conf
+
+bin/
+build/
