@@ -119,6 +119,51 @@ func TestParseFlags_srcBadPrefix(t *testing.T) {
 	}
 }
 
+func TestParseFlags_lock(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-lock", "service/locks/consul-replicate",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "service/locks/consul-replicate"
+	if config.LockPath != expected {
+		t.Errorf("expected %q to be %q", config.LockPath, expected)
+	}
+}
+
+func TestParseFlags_status(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-status", "service/statuses/consul-replicate",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "service/statuses/consul-replicate"
+	if config.StatusPath != expected {
+		t.Errorf("expected %q to be %q", config.StatusPath, expected)
+	}
+}
+
+func TestParseFlags_service(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-service", "replicator",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "replicator"
+	if config.ServiceName != expected {
+		t.Errorf("expected %q to be %q", config.ServiceName, expected)
+	}
+}
+
 // End deprecated CLI options
 
 func TestParseFlags_consul(t *testing.T) {
@@ -428,6 +473,51 @@ func TestParseFlags_logLevel(t *testing.T) {
 	expected := "debug"
 	if config.LogLevel != expected {
 		t.Errorf("expected %v to be %v", config.LogLevel, expected)
+	}
+}
+
+func TestParseFlags_lockPath(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-lock-path", "custom-lock-path",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "custom-lock-path"
+	if config.LockPath != expected {
+		t.Errorf("expected %v to be %v", config.LockPath, expected)
+	}
+}
+
+func TestParseFlags_statusPath(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-status-path", "custom-status-path",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "custom-status-path"
+	if config.StatusPath != expected {
+		t.Errorf("expected %v to be %v", config.StatusPath, expected)
+	}
+}
+
+func TestParseFlags_serviceName(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-service-name", "custom-service",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "custom-service"
+	if config.ServiceName != expected {
+		t.Errorf("expected %v to be %v", config.ServiceName, expected)
 	}
 }
 

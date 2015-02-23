@@ -61,6 +61,18 @@ type Config struct {
 
 	// LogLevel is the level with which to log for this config.
 	LogLevel string `mapstructure:"log_level"`
+
+	// LockPath is the path in the KV store that is used to perform leader
+	// election for the replicators (default: "service/consul-replicate/leader").
+	LockPath string `mapstructure:"lock_path"`
+
+	// StatusPath is the path in the KV store that is used to store the
+	// replication status (default: "service/consul-replicate/status").
+	StatusPath string `mapstructure:"status_path"`
+
+	// ServiceName is the name of the service that is registered in Consul's
+	// catalog (default: "consul-replicate").
+	ServiceName string `mapstructure:"service_name"`
 }
 
 // Merge merges the values in config into this config object. Values in the
@@ -130,6 +142,18 @@ func (c *Config) Merge(config *Config) {
 
 	if config.LogLevel != "" {
 		c.LogLevel = config.LogLevel
+	}
+
+	if config.LockPath != "" {
+		c.LockPath = config.LockPath
+	}
+
+	if config.StatusPath != "" {
+		c.StatusPath = config.StatusPath
+	}
+
+	if config.ServiceName != "" {
+		c.ServiceName = config.ServiceName
 	}
 }
 
@@ -265,7 +289,10 @@ func DefaultConfig() *Config {
 			Min: 150 * time.Millisecond,
 			Max: 400 * time.Millisecond,
 		},
-		LogLevel: logLevel,
+		LogLevel:    logLevel,
+		LockPath:    "service/consul-replicate/leader",
+		StatusPath:  "service/consul-replicate/status",
+		ServiceName: "consul-replicate",
 	}
 }
 

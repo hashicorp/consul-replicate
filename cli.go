@@ -167,13 +167,24 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 	flags.BoolVar(&once, "once", false, "")
 	flags.BoolVar(&version, "version", false, "")
 
+	// Advanced options
+	flags.StringVar(&config.LockPath, "lock-path", config.LockPath, "")
+	flags.StringVar(&config.StatusPath, "status-path", config.StatusPath, "")
+	flags.StringVar(&config.ServiceName, "service-name", config.ServiceName, "")
+
 	// Deprecated options
 	var deprecatedAddr string
-	flags.StringVar(&deprecatedAddr, "addr", config.Consul, "")
+	flags.StringVar(&deprecatedAddr, "addr", "", "")
 	var deprecatedDest string
 	flags.StringVar(&deprecatedDest, "dst-prefix", "", "")
 	var deprecatedSrc string
 	flags.StringVar(&deprecatedSrc, "src", "", "")
+	var deprecatedLock string
+	flags.StringVar(&deprecatedLock, "lock", "", "")
+	var deprecatedStatus string
+	flags.StringVar(&deprecatedStatus, "status", "", "")
+	var deprecatedService string
+	flags.StringVar(&deprecatedService, "service", "", "")
 
 	// If there was a parser error, stop
 	if err := flags.Parse(args); err != nil {
@@ -213,6 +224,18 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 		}
 
 		config.Prefixes[0] = newPrefix
+	}
+	if deprecatedLock != "" {
+		log.Printf("[WARN] -lock is deprecated - please use -lock-path=<path> instead")
+		config.LockPath = deprecatedLock
+	}
+	if deprecatedStatus != "" {
+		log.Printf("[WARN] -status is deprecated - please use -status-path=<path> instead")
+		config.StatusPath = deprecatedStatus
+	}
+	if deprecatedService != "" {
+		log.Printf("[WARN] -service is deprecated - please use -service-name=<name> instead")
+		config.ServiceName = deprecatedService
 	}
 
 	return config, once, version, nil
@@ -268,21 +291,12 @@ Options:
 
 Advanced Options:
 
-  -lock=<path>             Sets the path in the KV store that is used to perform
+  -lock-path=<path>        Sets the path in the KV store that is used to perform
                            leader election for the replicators (default:
                            "service/consul-replicate/leader")
-  -status=<path>           Sets the path in the KV store that is used to store
+  -status-path=<path>      Sets the path in the KV store that is used to store
                            the replication status (default:
                            "service/consul-replicate/status")
-  -service=<name>          Sets the name of the service that is registered in
+  -service-name=<name>     Sets the name of the service that is registered in
                            Consul's catalog (default: "consul-replicate")
 `
-
-// TODO: Handle deprecations/updates for the following options:
-//
-// -addr                 Replace with -consul
-// -dst-prefix=global/   Provides the prefix which is the root of replicated keys
-//                       in the destination datacenter. Defaults to match source.
-// -prefix=global/       Provides the prefix which is the root of replicated keys
-//                       in the source datacenter
-// -src=dc               Provides the source destination to replicate from
