@@ -243,6 +243,7 @@ Advanced Options:
 
 // TODO: Handle deprecations/updates for the following options:
 //
+// -addr                 Replace with -consul
 // -dst-prefix=global/   Provides the prefix which is the root of replicated keys
 //                       in the destination datacenter. Defaults to match source.
 // -prefix=global/       Provides the prefix which is the root of replicated keys
