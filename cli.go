@@ -23,6 +23,9 @@ const (
 	ExitCodeOK int = 0
 
 	ExitCodeError = 10 + iota
+	ExitCodeParseFlagsError
+	ExitCodeLoggingError
+	ExitCodeRunnerError
 	ExitCodeInterrupt
 )
 
@@ -53,7 +56,7 @@ func NewCLI(out, err io.Writer) *CLI {
 // status from the command.
 func (cli *CLI) Run(args []string) int {
 	// Parse the flags
-	config, once, dry, version, err := cli.parseFlags(args[1:])
+	config, once, version, err := cli.parseFlags(args[1:])
 	if err != nil {
 		return cli.handleError(err, ExitCodeParseFlagsError)
 	}
@@ -79,7 +82,7 @@ func (cli *CLI) Run(args []string) int {
 	}
 
 	// Initial runner
-	runner, err := NewRunner(config, dry, once)
+	runner, err := NewRunner(config, once)
 	if err != nil {
 		return cli.handleError(err, ExitCodeRunnerError)
 	}
@@ -109,7 +112,7 @@ func (cli *CLI) Run(args []string) int {
 			case syscall.SIGHUP:
 				fmt.Fprintf(cli.errStream, "Received HUP, reloading configuration...\n")
 				runner.Stop()
-				runner, err = NewRunner(config, dry, once)
+				runner, err = NewRunner(config, once)
 				if err != nil {
 					return cli.handleError(err, ExitCodeRunnerError)
 				}
@@ -138,8 +141,8 @@ func (cli *CLI) stop() {
 // Flag library. This is extracted into a helper to keep the main function
 // small, but it also makes writing tests for parsing command line arguments
 // much easier and cleaner.
-func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, bool, error) {
-	var dry, once, version bool
+func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
+	var once, version bool
 	var config = DefaultConfig()
 
 	// Parse the flags and options
@@ -156,20 +159,25 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, bool, error) {
 	flags.DurationVar(&config.MaxStale, "max-stale", config.MaxStale, "")
 	flags.BoolVar(&config.Syslog.Enabled, "syslog", config.Syslog.Enabled, "")
 	flags.StringVar(&config.Syslog.Facility, "syslog-facility", config.Syslog.Facility, "")
+	flags.Var((*prefixVar)(&config.Prefixes), "prefix", "")
 	flags.Var((*watch.WaitVar)(config.Wait), "wait", "")
 	flags.DurationVar(&config.Retry, "retry", config.Retry, "")
 	flags.StringVar(&config.Path, "config", config.Path, "")
 	flags.StringVar(&config.LogLevel, "log-level", config.LogLevel, "")
-	flags.BoolVar(&dry, "dry", false, "")
+	flags.BoolVar(&once, "once", false, "")
 	flags.BoolVar(&version, "version", false, "")
 
 	// Deprecated options
-	var deprecatedAddr bool
+	var deprecatedAddr string
 	flags.StringVar(&deprecatedAddr, "addr", config.Consul, "")
+	var deprecatedDest string
+	flags.StringVar(&deprecatedDest, "dst-prefix", "", "")
+	var deprecatedSrc string
+	flags.StringVar(&deprecatedSrc, "src", "", "")
 
 	// If there was a parser error, stop
 	if err := flags.Parse(args); err != nil {
-		return nil, false, false, false, err
+		return nil, false, false, err
 	}
 
 	// Handle deprecations
@@ -177,8 +185,37 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, bool, error) {
 		log.Printf("[WARN] -addr is deprecated - please use -consul=<...> instead")
 		config.Consul = deprecatedAddr
 	}
+	if deprecatedDest != "" {
+		log.Printf("[WARN] -dst-prefix is deprecated - please use -prefix=<source:destination> instead")
 
-	return config, once, dry, version, nil
+		// If there are no prefixes, we cannot reasonably continue
+		if len(config.Prefixes) < 1 {
+			return nil, false, false, fmt.Errorf("must specify at least one prefix")
+		}
+
+		config.Prefixes[0].Destination = deprecatedDest
+	}
+	if deprecatedSrc != "" {
+		log.Printf("[WARN] -src is deprecated - please use -prefix=<source:destination> instead")
+
+		// If there are no prefixes, we cannot reasonably continue
+		if len(config.Prefixes) < 1 {
+			return nil, false, false, fmt.Errorf("must specify at least one prefix")
+		}
+
+		// This is pretty jank, but build the thing into a string so we can convert
+		// it back into a prefix. Good times. Good times.
+		prefix := config.Prefixes[0]
+		raw := fmt.Sprintf("%s@%s:%s", prefix.Source.Prefix, deprecatedSrc, prefix.Destination)
+		newPrefix, err := ParsePrefix(raw)
+		if err != nil {
+			return nil, false, false, fmt.Errorf("error parsing source datacenter: %s", err)
+		}
+
+		config.Prefixes[0] = newPrefix
+	}
+
+	return config, once, version, nil
 }
 
 // handleError outputs the given error's Error() to the errStream and returns
