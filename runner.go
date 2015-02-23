@@ -78,9 +78,9 @@ func (r *Runner) Start() {
 	log.Printf("[INFO] (runner) starting")
 
 	// Add the dependencies to the watcher
-	// for _, prefix := range r.config.Prefixes {
-	// 	r.watcher.Add(prefix)
-	// }
+	for _, prefix := range r.config.Prefixes {
+		r.watcher.Add(prefix.Source)
+	}
 
 	for {
 		select {
