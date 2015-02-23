@@ -1,0 +1,328 @@
+package main
+
+import (
+	"crypto/tls"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sync"
+	"time"
+
+	dep "github.com/hashicorp/consul-template/dependency"
+	"github.com/hashicorp/consul-template/watch"
+	"github.com/hashicorp/consul/api"
+)
+
+// Regexp for invalid characters in keys
+var InvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+
+type Runner struct {
+	sync.RWMutex
+
+	// // Prefix is the KeyPrefixDependency associated with this Runner.
+	// Prefix *dependency.StoreKeyPrefix
+
+	// ErrCh and DoneCh are channels where errors and finish notifications occur.
+	ErrCh  chan error
+	DoneCh chan struct{}
+
+	// ExitCh is a channel for parent processes to read exit status values from
+	// the child processes.
+	ExitCh chan int
+
+	// config is the Config that created this Runner. It is used internally to
+	// construct other objects and pass data.
+	config *Config
+
+	// client is the consul/api client.
+	client *api.Client
+
+	// once indicates the runner should get data exactly one time and then stop.
+	once bool
+
+	// minTimer and maxTimer are used for quiescence.
+	minTimer, maxTimer <-chan time.Time
+
+	// outStream and errStream are the io.Writer streams where the runner will
+	// write information.
+	outStream, errStream io.Writer
+
+	// watcher is the watcher this runner is using.
+	watcher *watch.Watcher
+}
+
+// NewRunner accepts a config, command, and boolean value for once mode.
+func NewRunner(config *Config, once bool) (*Runner, error) {
+	log.Printf("[INFO] (runner) creating new runner (once: %v)", once)
+
+	runner := &Runner{
+		config: config,
+		once:   once,
+	}
+
+	if err := runner.init(); err != nil {
+		return nil, err
+	}
+
+	return runner, nil
+}
+
+// Start creates a new runner and begins watching dependencies and quiescence
+// timers. This is the main event loop and will block until finished.
+func (r *Runner) Start() {
+	log.Printf("[INFO] (runner) starting")
+
+	// Add the dependencies to the watcher
+	// for _, prefix := range r.config.Prefixes {
+	// 	r.watcher.Add(prefix)
+	// }
+
+	for {
+		select {
+		case data := <-r.watcher.DataCh:
+			r.Receive(data.Dependency, data.Data)
+
+			// Drain all views that have data
+		OUTER:
+			for {
+				select {
+				case data = <-r.watcher.DataCh:
+					r.Receive(data.Dependency, data.Data)
+				default:
+					break OUTER
+				}
+			}
+
+			// If we are waiting for quiescence, setup the timers
+			if r.config.Wait.Min != 0 && r.config.Wait.Max != 0 {
+				log.Printf("[INFO] (runner) quiescence timers starting")
+				r.minTimer = time.After(r.config.Wait.Min)
+				if r.maxTimer == nil {
+					r.maxTimer = time.After(r.config.Wait.Max)
+				}
+				continue
+			}
+		case <-r.minTimer:
+			log.Printf("[INFO] (runner) quiescence minTimer fired")
+			r.minTimer, r.maxTimer = nil, nil
+		case <-r.maxTimer:
+			log.Printf("[INFO] (runner) quiescence maxTimer fired")
+			r.minTimer, r.maxTimer = nil, nil
+		case err := <-r.watcher.ErrCh:
+			// Intentionally do not send the error back up to the runner. Eventually,
+			// once Consul API implements errwrap and multierror, we can check the
+			// "type" of error and conditionally alert back.
+			//
+			// if err.Contains(Something) {
+			//   errCh <- err
+			// }
+			log.Printf("[ERR] (runner) watcher reported error: %s", err)
+		case <-r.watcher.FinishCh:
+			log.Printf("[INFO] (runner) watcher reported finish")
+			return
+		case <-r.DoneCh:
+			log.Printf("[INFO] (runner) received finish")
+			return
+		}
+
+		// If we got this far, that means we got new data or one of the timers
+		// fired, so attempt to run.
+		if err := r.Run(); err != nil {
+			r.ErrCh <- err
+			return
+		}
+	}
+}
+
+// Stop halts the execution of this runner and its subprocesses.
+func (r *Runner) Stop() {
+	log.Printf("[INFO] (runner) stopping")
+	r.watcher.Stop()
+	close(r.DoneCh)
+}
+
+// Receive accepts data from Consul and maps that data to the prefix.
+func (r *Runner) Receive(d dep.Dependency, data interface{}) {
+	r.Lock()
+	defer r.Unlock()
+}
+
+// Run invokes a single pass of the runner.
+func (r *Runner) Run() error {
+	log.Printf("[INFO] (runner) running")
+	return nil
+}
+
+// init creates the Runner's underlying data structures and returns an error if
+// any problems occur.
+func (r *Runner) init() error {
+	// Merge multiple configs if given
+	if r.config.Path != "" {
+		err := buildConfig(r.config, r.config.Path)
+		if err != nil {
+			return fmt.Errorf("runner: %s", err)
+		}
+	}
+
+	// Add default values for the config
+	r.config.Merge(DefaultConfig())
+
+	// Create the client
+	client, err := newAPIClient(r.config)
+	if err != nil {
+		return fmt.Errorf("runner: %s", err)
+	}
+	r.client = client
+
+	// Create the watcher
+	watcher, err := newWatcher(r.config, client, r.once)
+	if err != nil {
+		return fmt.Errorf("runner: %s", err)
+	}
+	r.watcher = watcher
+
+	r.outStream = os.Stdout
+	r.errStream = os.Stderr
+
+	r.ErrCh = make(chan error)
+	r.DoneCh = make(chan struct{})
+	r.ExitCh = make(chan int, 1)
+
+	return nil
+}
+
+// newAPIClient creates a new API client from the given config and
+func newAPIClient(config *Config) (*api.Client, error) {
+	log.Printf("[INFO] (runner) creating consul/api client")
+
+	consulConfig := api.DefaultConfig()
+
+	if config.Consul != "" {
+		log.Printf("[DEBUG] (runner) setting address to %s", config.Consul)
+		consulConfig.Address = config.Consul
+	}
+
+	if config.Token != "" {
+		log.Printf("[DEBUG] (runner) setting token to %s", config.Token)
+		consulConfig.Token = config.Token
+	}
+
+	if config.SSL.Enabled {
+		log.Printf("[DEBUG] (runner) enabling SSL")
+		consulConfig.Scheme = "https"
+	}
+
+	if !config.SSL.Verify {
+		log.Printf("[WARN] (runner) disabling SSL verification")
+		consulConfig.HttpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
+
+	if config.Auth != nil {
+		log.Printf("[DEBUG] (runner) setting basic auth")
+		consulConfig.HttpAuth = &api.HttpBasicAuth{
+			Username: config.Auth.Username,
+			Password: config.Auth.Password,
+		}
+	}
+
+	client, err := api.NewClient(consulConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// newWatcher creates a new watcher.
+func newWatcher(config *Config, client *api.Client, once bool) (*watch.Watcher, error) {
+	log.Printf("[INFO] (runner) creating Watcher")
+
+	watcher, err := watch.NewWatcher(&watch.WatcherConfig{
+		Client:   client,
+		Once:     once,
+		MaxStale: config.MaxStale,
+		RetryFunc: func(current time.Duration) time.Duration {
+			return config.Retry
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return watcher, err
+}
+
+// buildConfig iterates and merges all configuration files in a given directory.
+// The config parameter will be modified and merged with subsequent configs
+// found in the directory.
+func buildConfig(config *Config, path string) error {
+	log.Printf("[DEBUG] merging with config at %s", path)
+
+	// Ensure the given filepath exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("config: missing file/folder: %s", path)
+	}
+
+	// Check if a file was given or a path to a directory
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("config: error stating file: %s", err)
+	}
+
+	// Recursively parse directories, single load files
+	if stat.Mode().IsDir() {
+		// Ensure the given filepath has at least one config file
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			return fmt.Errorf("config: error listing directory: %s", err)
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("config: must contain at least one configuration file")
+		}
+
+		// Potential bug: Walk does not follow symlinks!
+		err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+			// If WalkFunc had an error, just return it
+			if err != nil {
+				return err
+			}
+
+			// Do nothing for directories
+			if info.IsDir() {
+				return nil
+			}
+
+			// Parse and merge the config
+			newConfig, err := ParseConfig(path)
+			if err != nil {
+				return err
+			}
+			config.Merge(newConfig)
+
+			return nil
+		})
+
+		if err != nil {
+			return fmt.Errorf("config: walk error: %s", err)
+		}
+	} else if stat.Mode().IsRegular() {
+		newConfig, err := ParseConfig(path)
+		if err != nil {
+			return err
+		}
+		config.Merge(newConfig)
+	} else {
+		return fmt.Errorf("config: unknown filetype: %s", stat.Mode().String())
+	}
+
+	return nil
+}
