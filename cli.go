@@ -287,12 +287,7 @@ Options:
 
 Advanced Options:
 
-  -lock-path=<path>        Sets the path in the KV store that is used to perform
-                           leader election for the replicators (default:
-                           "service/consul-replicate/leader")
-  -status-path=<path>      Sets the path in the KV store that is used to store
+  -status-dir=<path>       Sets the path in the KV store that is used to store
                            the replication status (default:
-                           "service/consul-replicate/status")
-  -service-name=<name>     Sets the name of the service that is registered in
-                           Consul's catalog (default: "consul-replicate")
+                           "service/consul-replicate/statuses")
 `
