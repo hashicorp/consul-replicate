@@ -149,7 +149,27 @@ $ consul-replicate -log-level debug ...
 ```
 
 ```text
-TODO
+<timestamp> [INFO] (runner) creating new runner (once: false)
+<timestamp> [INFO] (runner) creating consul/api client
+<timestamp> [DEBUG] (runner) setting address to 127.0.0.1:8500
+<timestamp> [DEBUG] (runner) setting basic auth
+<timestamp> [INFO] (runner) creating Watcher
+<timestamp> [INFO] (runner) starting
+<timestamp> [INFO] (watcher) adding "storeKeyPrefix(global@dc1)"
+<timestamp> [DEBUG] (watcher) "storeKeyPrefix(global@dc1)" starting
+<timestamp> [DEBUG] (view) "storeKeyPrefix(global@dc1)" starting fetch
+<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") querying Consul with ...
+<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") Consul returned 5 key pairs
+<timestamp> [INFO] (view) "storeKeyPrefix(global@dc1)" received data from consul
+<timestamp> [INFO] (runner) quiescence timers starting
+<timestamp> [DEBUG] (view) "storeKeyPrefix(global@dc1)" starting fetch
+<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") querying Consul with ...
+<timestamp> [DEBUG] (runner) updated key "backup/five"
+<timestamp> [DEBUG] (runner) updated key "backup/four"
+<timestamp> [DEBUG] (runner) updated key "backup/one"
+<timestamp> [DEBUG] (runner) updated key "backup/three"
+<timestamp> [DEBUG] (runner) updated key "backup/two"
+<timestamp> [INFO] (runner) replicated 5 updates, 0 deletes
 # ...
 ```
 
