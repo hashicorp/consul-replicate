@@ -136,8 +136,8 @@ func (c *Config) Merge(config *Config) {
 		c.LogLevel = config.LogLevel
 	}
 
-	if config.StatusPath != "" {
-		c.StatusPath = config.StatusPath
+	if config.StatusDir != "" {
+		c.StatusDir = config.StatusDir
 	}
 }
 
@@ -273,8 +273,8 @@ func DefaultConfig() *Config {
 			Min: 150 * time.Millisecond,
 			Max: 400 * time.Millisecond,
 		},
-		LogLevel:   logLevel,
-		StatusPath: "service/consul-replicate/statuses",
+		LogLevel:  logLevel,
+		StatusDir: "service/consul-replicate/statuses",
 	}
 }
 

@@ -284,11 +284,11 @@ func TestParseConfig_correctValues(t *testing.T) {
 			Min: time.Second * 5,
 			Max: time.Second * 10,
 		},
-		WaitRaw:    "5s:10s",
-		Retry:      10 * time.Second,
-		RetryRaw:   "10s",
-		LogLevel:   "warn",
-		StatusPath: "global/statuses/replicators",
+		WaitRaw:   "5s:10s",
+		Retry:     10 * time.Second,
+		RetryRaw:  "10s",
+		LogLevel:  "warn",
+		StatusDir: "global/statuses/replicators",
 	}
 
 	if !reflect.DeepEqual(config, expected) {
