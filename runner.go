@@ -1,8 +1,9 @@
 package main
 
 import (
-	"crypto/sha256"
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -402,8 +403,9 @@ func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
 
 func (r *Runner) statusPath(prefix *Prefix) string {
 	plain := fmt.Sprintf("%s-%s", prefix.Source.Prefix, prefix.Destination)
-	key := sha256.Sum256([]byte(plain))
-	return filepath.Join(r.config.StatusDir, string(key[:]))
+	hash := md5.Sum([]byte(plain))
+	enc := hex.EncodeToString(hash[:])
+	return filepath.Join(r.config.StatusDir, enc)
 }
 
 // newAPIClient creates a new API client from the given config and
