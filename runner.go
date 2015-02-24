@@ -222,6 +222,8 @@ func (r *Runner) init() error {
 	}
 	r.watcher = watcher
 
+	r.data = make(map[string]*watch.View)
+
 	r.outStream = os.Stdout
 	r.errStream = os.Stderr
 
