@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -286,49 +285,44 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	updates := 0
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		if prefix.Source.Prefix != prefix.Destination {
-			pair.Key = strings.Replace(pair.Key, prefix.Source.Prefix, prefix.Destination, 1)
-		}
-		usedKeys[pair.Key] = struct{}{}
+		key := filepath.Join(prefix.Destination, pair.Key)
+
+		usedKeys[key] = struct{}{}
 
 		// Ignore if the modify index is old
 		if pair.ModifyIndex <= status.LastReplicated {
 			log.Printf("[DEBUG] (runner) skipping because %q is already "+
-				"replicated", pair.Key)
+				"replicated", key)
 			continue
 		}
 
 		// Check if lock
 		if pair.Flags == api.SemaphoreFlagValue {
 			log.Printf("[WARN] (runner) lock in use at %q, but sessions cannot be "+
-				"replicated across datacenters", pair.Key)
-			pair.Session = ""
+				"replicated across datacenters", key)
 		}
 
 		// Check if semaphor
 		if pair.Flags == api.LockFlagValue {
 			log.Printf("[WARN] (runner) semaphore in use at %q, but sessions cannot "+
-				"be replicated across datacenters", pair.Key)
-			pair.Session = ""
+				"be replicated across datacenters", key)
 		}
 
 		// Check if session attached
 		if pair.Session != "" {
 			log.Printf("[WARN] (runner) %q has attached session, but sessions "+
-				"cannot be replicated across datacenters", pair.Key)
-			pair.Session = ""
+				"cannot be replicated across datacenters", key)
 		}
 
 		if _, err := kv.Put(&api.KVPair{
-			Key:     pair.Key,
-			Flags:   pair.Flags,
-			Value:   []byte(pair.Value),
-			Session: pair.Session,
+			Key:   key,
+			Flags: pair.Flags,
+			Value: []byte(pair.Value),
 		}, nil); err != nil {
-			errCh <- fmt.Errorf("failed to write %q: %s", pair.Key, err)
+			errCh <- fmt.Errorf("failed to write %q: %s", key, err)
 			return
 		}
-		log.Printf("[DEBUG] (runner) updated key %q", pair.Key)
+		log.Printf("[DEBUG] (runner) updated key %q", key)
 		updates++
 	}
 
