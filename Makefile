@@ -20,6 +20,9 @@ test: deps
 	go list ./... | xargs -n1 go test -timeout=5s
 	go list ./... | xargs -n1 go vet
 
+integration: test
+	$(shell pwd)/integration.sh
+
 xcompile: deps test
 	@rm -rf build/
 	@mkdir -p build
@@ -42,4 +45,4 @@ package: xcompile
 		echo $$f; \
 	done
 
-.PHONY: all deps updatedeps build test xcompile package
+.PHONY: all deps updatedeps build test integration xcompile package
