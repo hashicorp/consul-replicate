@@ -311,7 +311,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 
 		// Check if session attached
 		if pair.Session != "" {
-			log.Printf("[DEBUG] (runner) %q has attached session, but sessions "+
+			log.Printf("[WARN] (runner) %q has attached session, but sessions "+
 				"cannot be replicated across datacenters", pair.Key)
 			pair.Session = ""
 		}
