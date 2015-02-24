@@ -128,6 +128,15 @@ If a directory is given instead of a file, all files in the directory (recursive
 **Commands specified on the command line take precedence over those defined in a config file!**
 
 
+Leader Election
+---------------
+Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
+
+```shell
+consul lock locks/replicate consul-replicate -prefix ...
+```
+
+
 Debugging
 ---------
 Consul Replicate can print verbose debugging output. To set the log level for Consul Replicate, use the `-log-level` flag:
