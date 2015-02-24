@@ -144,8 +144,8 @@ func TestParseFlags_status(t *testing.T) {
 	}
 
 	expected := "service/statuses/consul-replicate"
-	if config.StatusPath != expected {
-		t.Errorf("expected %q to be %q", config.StatusPath, expected)
+	if config.StatusDir != expected {
+		t.Errorf("expected %q to be %q", config.StatusDir, expected)
 	}
 }
 
@@ -476,48 +476,18 @@ func TestParseFlags_logLevel(t *testing.T) {
 	}
 }
 
-func TestParseFlags_lockPath(t *testing.T) {
+func TestParseFlags_statusDir(t *testing.T) {
 	cli := NewCLI(ioutil.Discard, ioutil.Discard)
 	config, _, _, err := cli.parseFlags([]string{
-		"-lock-path", "custom-lock-path",
+		"-status-dir", "custom-status-dir",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := "custom-lock-path"
-	if config.LockPath != expected {
-		t.Errorf("expected %v to be %v", config.LockPath, expected)
-	}
-}
-
-func TestParseFlags_statusPath(t *testing.T) {
-	cli := NewCLI(ioutil.Discard, ioutil.Discard)
-	config, _, _, err := cli.parseFlags([]string{
-		"-status-path", "custom-status-path",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expected := "custom-status-path"
-	if config.StatusPath != expected {
-		t.Errorf("expected %v to be %v", config.StatusPath, expected)
-	}
-}
-
-func TestParseFlags_serviceName(t *testing.T) {
-	cli := NewCLI(ioutil.Discard, ioutil.Discard)
-	config, _, _, err := cli.parseFlags([]string{
-		"-service-name", "custom-service",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expected := "custom-service"
-	if config.ServiceName != expected {
-		t.Errorf("expected %v to be %v", config.ServiceName, expected)
+	expected := "custom-status-dir"
+	if config.StatusDir != expected {
+		t.Errorf("expected %v to be %v", config.StatusDir, expected)
 	}
 }
 

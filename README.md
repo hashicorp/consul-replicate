@@ -55,10 +55,7 @@ Additionally. the following options are available for advanced users. It is not 
 
 |       Option      | Description |
 | ----------------- |------------ |
-| `lock`            | The path in the KV store that is used to perform leader election for the replicators. The default value is "service/consul-replicate/leader".
-| `status`          | The path in the KV store that is used to store the replication status. The default value is "service/consul-replicate/status".
-| `service`         | The name of the service that is registered in Consul's catalog. The default value is "consul-replicate".
-
+| `status-dir`      | The path in the KV store that is used to store the replication statuses. The default value is "service/consul-replicate/statuses".
 
 ### Command Line
 The CLI interface supports all of the options detailed above.
@@ -115,7 +112,6 @@ syslog {
 prefix {
   source = "global@nyc1"
 }
-
 
 prefix {
   source = "global@nyc1"

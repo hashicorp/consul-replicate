@@ -187,9 +187,7 @@ func TestParseConfig_correctValues(t *testing.T) {
     retry = "10s"
     log_level = "warn"
 
-    lock_path = "global/locks/replicator"
-    status_path = "global/statuses/replicator"
-    service_name = "replicator"
+    status_path = "global/statuses/replicators"
 
     auth {
     	enabled = true
@@ -286,13 +284,11 @@ func TestParseConfig_correctValues(t *testing.T) {
 			Min: time.Second * 5,
 			Max: time.Second * 10,
 		},
-		WaitRaw:     "5s:10s",
-		Retry:       10 * time.Second,
-		RetryRaw:    "10s",
-		LogLevel:    "warn",
-		LockPath:    "global/locks/replicator",
-		StatusPath:  "global/statuses/replicator",
-		ServiceName: "replicator",
+		WaitRaw:    "5s:10s",
+		Retry:      10 * time.Second,
+		RetryRaw:   "10s",
+		LogLevel:   "warn",
+		StatusPath: "global/statuses/replicators",
 	}
 
 	if !reflect.DeepEqual(config, expected) {

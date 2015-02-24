@@ -168,9 +168,7 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 	flags.BoolVar(&version, "version", false, "")
 
 	// Advanced options
-	flags.StringVar(&config.LockPath, "lock-path", config.LockPath, "")
-	flags.StringVar(&config.StatusPath, "status-path", config.StatusPath, "")
-	flags.StringVar(&config.ServiceName, "service-name", config.ServiceName, "")
+	flags.StringVar(&config.StatusDir, "status-dir", config.StatusDir, "")
 
 	// Deprecated options
 	var deprecatedAddr string
@@ -226,16 +224,14 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 		config.Prefixes[0] = newPrefix
 	}
 	if deprecatedLock != "" {
-		log.Printf("[WARN] -lock is deprecated - please use -lock-path=<path> instead")
-		config.LockPath = deprecatedLock
+		log.Printf("[WARN] -lock is deprecated - please use consul lock instead")
 	}
 	if deprecatedStatus != "" {
-		log.Printf("[WARN] -status is deprecated - please use -status-path=<path> instead")
-		config.StatusPath = deprecatedStatus
+		log.Printf("[WARN] -status is deprecated - please use -status-dir=<directory> instead")
+		config.StatusDir = deprecatedStatus
 	}
 	if deprecatedService != "" {
-		log.Printf("[WARN] -service is deprecated - please use -service-name=<name> instead")
-		config.ServiceName = deprecatedService
+		log.Printf("[WARN] -service is deprecated - please use consul lock instead")
 	}
 
 	return config, once, version, nil
