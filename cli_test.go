@@ -121,16 +121,11 @@ func TestParseFlags_srcBadPrefix(t *testing.T) {
 
 func TestParseFlags_lock(t *testing.T) {
 	cli := NewCLI(ioutil.Discard, ioutil.Discard)
-	config, _, _, err := cli.parseFlags([]string{
+	_, _, _, err := cli.parseFlags([]string{
 		"-lock", "service/locks/consul-replicate",
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	expected := "service/locks/consul-replicate"
-	if config.LockPath != expected {
-		t.Errorf("expected %q to be %q", config.LockPath, expected)
 	}
 }
 
@@ -151,16 +146,11 @@ func TestParseFlags_status(t *testing.T) {
 
 func TestParseFlags_service(t *testing.T) {
 	cli := NewCLI(ioutil.Discard, ioutil.Discard)
-	config, _, _, err := cli.parseFlags([]string{
+	_, _, _, err := cli.parseFlags([]string{
 		"-service", "replicator",
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	expected := "replicator"
-	if config.ServiceName != expected {
-		t.Errorf("expected %q to be %q", config.ServiceName, expected)
 	}
 }
 
