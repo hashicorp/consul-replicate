@@ -29,7 +29,11 @@ var InvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 // Status is an internal struct that is responsible for marshaling and
 // unmarshaling JSON responses into keys.
 type Status struct {
+	// LastReplicated is the last time the replication occurred.
 	LastReplicated uint64
+
+	// Source and Destination are the given and final destination.
+	Source, Destination string
 }
 
 type Runner struct {
@@ -349,6 +353,8 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 
 	// Update our status
 	status.LastReplicated = view.LastIndex
+	status.Source = prefix.Source.Prefix
+	status.Destination = prefix.Destination
 	if err := r.setStatus(prefix, status); err != nil {
 		errCh <- fmt.Errorf("failed to checkpoint status: %s", err)
 		return
