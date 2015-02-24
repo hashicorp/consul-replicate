@@ -10,8 +10,6 @@ This project provides a convenient way to replicate K/V pairs across multiple [C
 
 The daemon `consul-replicate` integrates with [Consul][] to perform cross-datacenter K/V replication. This makes it possible to manage application configuration from a central datacenter, with low-latency asyncronous replication to other datacenters, thus avoiding the need for smart clients which would need to write to all datacenters and queue writes to handle network failures.
 
-[Consul Replicate][] uses a highly-available, pull based architecture. Multiple instances of consul-replicate can run per datacenter for redundancy and high-availablilty. They use Consul's [leader election][] to elect a single node to perform the replication and gracefully failover. The active replicator watches the remote datacenter for changes and updates the local K/V store as appropriate. The daemon should not be used to attempt master-master replication. It is not designed for this use case, and will not ever reach a stable point. Instead, it should be used only for master-slave replication, where a single datacenter is considered authoritative.
-
 **The documentation in this README corresponds to the master branch of Consul Replicate. It may contain unreleased features or different APIs than the most recently released version. Please see the Git tag that corresponds to your version of Consul Replicate for the proper documentation.**
 
 
@@ -130,7 +128,7 @@ If a directory is given instead of a file, all files in the directory (recursive
 
 Leader Election
 ---------------
-Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
+Early versions of [Consul Replicate][] allowed multiple instances to run per datacenter for redundancy and high-availablilty. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully failover. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
 
 ```shell
 consul lock locks/replicate consul-replicate -prefix ...
