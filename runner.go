@@ -318,13 +318,10 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 		}
 
 		if _, err := kv.Put(&api.KVPair{
-			Key:         pair.Key,
-			CreateIndex: pair.CreateIndex,
-			ModifyIndex: pair.ModifyIndex,
-			LockIndex:   pair.LockIndex,
-			Flags:       pair.Flags,
-			Value:       []byte(pair.Value),
-			Session:     pair.Session,
+			Key:     pair.Key,
+			Flags:   pair.Flags,
+			Value:   []byte(pair.Value),
+			Session: pair.Session,
 		}, nil); err != nil {
 			errCh <- fmt.Errorf("failed to write %q: %s", pair.Key, err)
 			return
