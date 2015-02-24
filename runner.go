@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
@@ -375,8 +374,7 @@ func (r *Runner) getStatus(prefix *Prefix) (*Status, error) {
 
 	status := &Status{}
 	if pair != nil {
-		dec := json.NewDecoder(bytes.NewReader(pair.Value))
-		if err := dec.Decode(status); err != nil {
+		if err := json.Unmarshal(pair.Value, &status); err != nil {
 			return nil, err
 		}
 	}
@@ -385,19 +383,18 @@ func (r *Runner) getStatus(prefix *Prefix) (*Status, error) {
 
 // setStatus is used to update the last replication status.
 func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.Encode(status)
-
-	// Create the KVPair
-	// TODO: are there special flags to set here?
-	pair := &api.KVPair{
-		Key:   r.statusPath(prefix),
-		Value: buf.Bytes(),
+	// Encode the JSON as pretty so operators can easily view it in the Consul UI.
+	enc, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		return err
 	}
 
+	// Put the key to Consul.
 	kv := r.client.KV()
-	_, err := kv.Put(pair, nil)
+	_, err = kv.Put(&api.KVPair{
+		Key:   r.statusPath(prefix),
+		Value: enc,
+	}, nil)
 	return err
 }
 
