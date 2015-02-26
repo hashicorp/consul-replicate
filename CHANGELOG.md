@@ -1,6 +1,8 @@
 Consul Replicate Changelog
 ==========================
 
+# v0.2.0.dev (Unreleased)
+
 # v0.2.0 (February 26, 2015)
 
 BREAKING CHANGES:
