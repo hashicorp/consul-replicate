@@ -8,7 +8,7 @@ import (
 const Name = "consul-replicate"
 
 // Version is the current version of this application.
-const Version = "0.1.0.dev"
+const Version = "0.2.0"
 
 func main() {
 	cli := NewCLI(os.Stdout, os.Stderr)
