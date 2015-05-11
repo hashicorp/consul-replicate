@@ -405,6 +405,27 @@ func TestParsePrefix_source(t *testing.T) {
 	}
 }
 
+func TestParsePrefix_sourceSlash(t *testing.T) {
+	source := "/global"
+	prefix, err := ParsePrefix(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "global"
+	if prefix.SourceRaw != expected {
+		t.Errorf("expected %q to equal %q", prefix.SourceRaw, expected)
+	}
+
+	d, err := dep.ParseStoreKeyPrefix("global")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(prefix.Source, d) {
+		t.Errorf("expected %#v to equal %#v", prefix.Source, d)
+	}
+}
+
 func TestParsePrefix_destination(t *testing.T) {
 	source, destination := "global@nyc4", "backup"
 	prefix, err := ParsePrefix(fmt.Sprintf("%s:%s", source, destination))
