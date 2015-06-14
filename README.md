@@ -183,7 +183,7 @@ $ consul-replicate -log-level debug ...
 
 FAQ
 ---
-**Q: Cam I use this for master-master replication?**<br>
+**Q: Can I use this for master-master replication?**<br>
 A: No, a proper leader will never be elected.
 
 
