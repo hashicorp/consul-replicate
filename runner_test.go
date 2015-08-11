@@ -29,8 +29,9 @@ func TestNewRunner_initialize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if runner.config != config {
-		t.Errorf("expected %#v to be %#v", runner.config, config)
+	// check the items we set in the config
+	if !reflect.DeepEqual(runner.config.Prefixes, config.Prefixes) {
+		t.Errorf("expected %#v to be %#v", runner.config.Prefixes, config.Prefixes)
 	}
 
 	if runner.once != once {
@@ -96,6 +97,19 @@ func TestReceive_addsToData(t *testing.T) {
 	}
 	if !reflect.DeepEqual(value.Data, data) {
 		t.Errorf("expected %q to be %q", value.Data, data)
+	}
+}
+
+func TestConfigDefaultOverrides(t *testing.T) {
+	expected := "test/statuses"
+
+	config := &Config{
+		StatusDir: expected,
+	}
+
+	r, _ := NewRunner(config, true)
+	if r.config.StatusDir != expected {
+		t.Errorf("expected StatusDir %q to be %q", r.config.StatusDir, expected)
 	}
 }
 

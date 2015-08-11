@@ -75,8 +75,12 @@ type Runner struct {
 func NewRunner(config *Config, once bool) (*Runner, error) {
 	log.Printf("[INFO] (runner) creating new runner (once: %v)", once)
 
+	// configuration settings override the defaults
+	mergedDefaultConfig := DefaultConfig()
+	mergedDefaultConfig.Merge(config)
+
 	runner := &Runner{
-		config: config,
+		config: mergedDefaultConfig,
 		once:   once,
 	}
 
@@ -204,9 +208,6 @@ func (r *Runner) init() error {
 			return fmt.Errorf("runner: %s", err)
 		}
 	}
-
-	// Add default values for the config
-	r.config.Merge(DefaultConfig())
 
 	// Create the client
 	client, err := newAPIClient(r.config)
