@@ -90,6 +90,7 @@ consul = "127.0.0.1:8500"
 token = "abcd1234"
 retry = "10s"
 max_stale = "10m"
+log_level = "debug"
 
 auth {
   enabled = true
