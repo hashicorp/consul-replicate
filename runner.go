@@ -453,13 +453,21 @@ func newAPIClient(config *Config) (*api.Client, error) {
 func newWatcher(config *Config, client *api.Client, once bool) (*watch.Watcher, error) {
 	log.Printf("[INFO] (runner) creating Watcher")
 
-	clientSet := dep.NewClientSet()
-	if err := clientSet.Add(client); err != nil {
+	clients := dep.NewClientSet()
+	if err := clients.CreateConsulClient(&dep.CreateConsulClientInput{
+		Address:      config.Consul,
+		Token:        config.Token,
+		AuthEnabled:  config.Auth.Enabled,
+		AuthUsername: config.Auth.Username,
+		AuthPassword: config.Auth.Password,
+		SSLEnabled:   config.SSL.Enabled,
+		SSLVerify:    config.SSL.Verify,
+	}); err != nil {
 		return nil, err
 	}
 
 	watcher, err := watch.NewWatcher(&watch.WatcherConfig{
-		Clients:  clientSet,
+		Clients:  clients,
 		Once:     once,
 		MaxStale: config.MaxStale,
 		RetryFunc: func(current time.Duration) time.Duration {

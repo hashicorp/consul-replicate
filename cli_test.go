@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/watch"
 )
 
@@ -41,14 +40,13 @@ func TestParseFlags_dstPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	prefix, err := ParsePrefix("global:backup")
-	if err != nil {
-		t.Fatal(err)
+	if len(config.Prefixes) < 1 {
+		t.Errorf("no prefixes")
 	}
 
-	expected := []*Prefix{prefix}
-	if !reflect.DeepEqual(config.Prefixes, expected) {
-		t.Errorf("expected %q to be %q", config.Prefixes, expected)
+	prefix := config.Prefixes[0].Source
+	if prefix.Prefix != "global" {
+		t.Errorf("expected %q to be %q", prefix.Prefix, "global")
 	}
 }
 
@@ -77,14 +75,13 @@ func TestParseFlags_src(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	prefix, err := ParsePrefix("global@nyc2")
-	if err != nil {
-		t.Fatal(err)
+	if len(config.Prefixes) < 1 {
+		t.Errorf("no prefixes")
 	}
 
-	expected := []*Prefix{prefix}
-	if !reflect.DeepEqual(config.Prefixes, expected) {
-		t.Errorf("expected %q to be %q", config.Prefixes, expected)
+	prefix := config.Prefixes[0].Source
+	if prefix.Prefix != "global" {
+		t.Errorf("expected %q to be %q", prefix.Prefix, "global")
 	}
 }
 
@@ -315,18 +312,12 @@ func TestParseFlags_prefixes(t *testing.T) {
 		t.Fatal("expected 1 prefix")
 	}
 
-	d, err := dep.ParseStoreKeyPrefix("global@nyc1")
-	if err != nil {
-		t.Fatal(err)
+	prefix := config.Prefixes[0]
+	if prefix.SourceRaw != "global@nyc1" {
+		t.Errorf("expected %q to be %q", prefix.SourceRaw, "global@nyc1")
 	}
-	expected := &Prefix{
-		Source:      d,
-		SourceRaw:   "global@nyc1",
-		Destination: "backup",
-	}
-
-	if !reflect.DeepEqual(config.Prefixes[0], expected) {
-		t.Errorf("expected %q to be %q", config.Prefixes[0], expected)
+	if prefix.Destination != "backup" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "backup")
 	}
 }
 

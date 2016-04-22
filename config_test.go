@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/test"
 	"github.com/hashicorp/consul-template/watch"
 )
@@ -144,18 +143,13 @@ func TestParseConfig_readFileError(t *testing.T) {
 // Test that parser errors are propagated up
 func TestParseConfig_parseFileError(t *testing.T) {
 	configFile := test.CreateTempfile([]byte(`
-    invalid file in here
+    invalid
   `), t)
 	defer test.DeleteTempfile(configFile, t)
 
 	_, err := ParseConfig(configFile.Name())
 	if err == nil {
 		t.Fatal("expected error, but nothing was returned")
-	}
-
-	expectedErr := "syntax error"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
 	}
 }
 
@@ -204,15 +198,6 @@ func TestParseConfig_correctValues(t *testing.T) {
     	enabled = true
     	facility = "LOCAL5"
     }
-
-    prefix {
-    	source = "global/config@nyc1"
-    }
-
-    prefix {
-    	source = "redis/config@nyc1"
-    	destination = "redis/backup"
-    }
   `), t)
 	defer test.DeleteTempfile(configFile, t)
 
@@ -221,33 +206,12 @@ func TestParseConfig_correctValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	globalDep, err := dep.ParseStoreKeyPrefix("global/config@nyc1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	global := &Prefix{
-		Source:      globalDep,
-		SourceRaw:   "global/config@nyc1",
-		Destination: "global/config",
-	}
-
-	redisDep, err := dep.ParseStoreKeyPrefix("redis/config@nyc1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	redis := &Prefix{
-		Source:      redisDep,
-		SourceRaw:   "redis/config@nyc1",
-		Destination: "redis/backup",
-	}
-
 	expected := &Config{
 		Path:        configFile.Name(),
 		Consul:      "nyc1.demo.consul.io",
 		Token:       "abcd1234",
 		MaxStale:    time.Second * 5,
 		MaxStaleRaw: "5s",
-		Prefixes:    []*Prefix{global, redis},
 		Auth: &Auth{
 			Enabled:  true,
 			Username: "test",
@@ -292,7 +256,7 @@ func TestParseConfig_correctValues(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(config, expected) {
-		t.Fatalf("expected \n%#v\n\n, got \n\n%#v", expected.Prefixes[0], config.Prefixes[0])
+		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, config)
 	}
 }
 
@@ -393,15 +357,10 @@ func TestParsePrefix_source(t *testing.T) {
 	}
 
 	if prefix.SourceRaw != source {
-		t.Errorf("expected %q to equal %q", prefix.SourceRaw, source)
+		t.Errorf("expected %q to be %q", prefix.SourceRaw, source)
 	}
-
-	d, err := dep.ParseStoreKeyPrefix("global")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(prefix.Source, d) {
-		t.Errorf("expected %#v to equal %#v", prefix.Source, d)
+	if prefix.Source.Prefix != source {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, source)
 	}
 }
 
@@ -414,15 +373,10 @@ func TestParsePrefix_sourceSlash(t *testing.T) {
 
 	expected := "global"
 	if prefix.SourceRaw != expected {
-		t.Errorf("expected %q to equal %q", prefix.SourceRaw, expected)
+		t.Errorf("expected %q to be %q", prefix.SourceRaw, expected)
 	}
-
-	d, err := dep.ParseStoreKeyPrefix("global")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(prefix.Source, d) {
-		t.Errorf("expected %#v to equal %#v", prefix.Source, d)
+	if prefix.Source.Prefix != expected {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, expected)
 	}
 }
 
@@ -433,18 +387,13 @@ func TestParsePrefix_destination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.SourceRaw != source {
-		t.Errorf("expected %q to equal %q", prefix.SourceRaw, source)
-	}
-
-	d, err := dep.ParseStoreKeyPrefix("global@nyc4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(prefix.Source, d) {
-		t.Errorf("expected %#v to equal %#v", prefix.Source, d)
+	if prefix.SourceRaw != "global@nyc4" {
+		t.Errorf("expected %q to be %q", prefix.SourceRaw, "global@nyc4")
 	}
 	if prefix.Destination != destination {
-		t.Errorf("expected %q to equal %q", prefix.Destination, destination)
+		t.Errorf("expected %q to be %q", prefix.Destination, destination)
+	}
+	if prefix.Source.Prefix != "global" {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global")
 	}
 }
