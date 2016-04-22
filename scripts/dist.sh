@@ -16,17 +16,6 @@ DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 # Change into that dir because we expect that
 cd $DIR
 
-# Generate and save godeps
-if [ -z $NODEPS ]; then
-  echo "==> Saving deps..."
-  rm -rf Godeps/
-  rm -rf vendor/
-  godep save ./...
-  git add -f vendor/
-  git add -f Godeps/
-  git commit -q -a -m "Add godeps for $VERSION"
-fi
-
 # Generate the tag
 if [ -z $NOTAG ]; then
   echo "==> Tagging..."
@@ -71,10 +60,3 @@ if [ -z $NOSIGN ]; then
   gpg --default-key 348FFC4C --detach-sig ./consul-replicate_${VERSION}_SHA256SUMS
 fi
 popd
-
-# Remove godeps now that we are done
-if [ -z $NODEPS ]; then
-  rm -rf Godeps/
-  rm -rf vendor/
-  git commit -q -a -m "Remove godeps"
-fi
