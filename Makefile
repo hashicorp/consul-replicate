@@ -1,48 +1,41 @@
-NAME = $(shell awk -F\" '/^const Name/ { print $$2 }' main.go)
-VERSION = $(shell awk -F\" '/^const Version/ { print $$2 }' main.go)
-DEPS = $(go list -f '{{range .TestImports}}{{.}} {{end}}' ./...)
+TEST?=./...
+NAME?=$(shell basename "$(CURDIR)")
+VERSION = $(shell awk -F\" '/^const Version/ { print $$2; exit }' main.go)
 
-all: deps build
+default: test
 
-deps:
-	go get -d -v ./...
-	echo $(DEPS) | xargs -n1 go get -d
+# bin generates the releasable binaries
+bin:
+	@sh -c "'$(CURDIR)/scripts/build.sh'"
 
+# dev creates binaries for testing locally - they are put into ./bin and $GOPATH
+dev:
+	@DEV=1 sh -c "'$(CURDIR)/scripts/build.sh'"
+
+# dist creates the binaries for distibution
+dist:
+	@sh -c "'$(CURDIR)/scripts/dist.sh' $(VERSION)"
+
+# integration runs the integration tests
+integration: generate
+	@sh -c "'$(CURDIR)/scripts/integration.sh'"
+
+# test runs the test suite and vets the code
+test: generate
+	go list $(TEST) | xargs -n1 go test $(TEST) $(TESTARGS) -timeout=60s -parallel=10
+
+# testrace runs the race checker
+testrace: generate
+	go list $(TEST) | xargs -n1 go test $(TEST) $(TESTARGS) -race
+
+# updatedeps installs all the dependencies needed to run and build - this is
+# specifically designed to only pull deps, but not self.
 updatedeps:
-	go get -u -v ./...
-	echo $(DEPS) | xargs -n1 go get -d
+	go get -u github.com/tools/godep
+	go get -u github.com/mitchellh/gox
+	go list ./... \
+		| xargs go list -f '{{ join .Deps "\n" }}{{ printf "\n" }}{{ join .TestImports "\n" }}' \
+		| grep -v github.com/hashicorp/$(NAME) \
+		| xargs go get -f -u -v
 
-build:
-	@mkdir -p bin/
-	go build -o bin/$(NAME)
-
-test: deps
-	go list ./... | xargs -n1 go test -timeout=5s
-	go list ./... | xargs -n1 go vet
-
-integration: test
-	$(shell pwd)/integration.sh
-
-xcompile: deps test
-	@rm -rf build/
-	@mkdir -p build
-	gox \
-		-os="darwin" \
-		-os="dragonfly" \
-		-os="freebsd" \
-		-os="linux" \
-		-os="netbsd" \
-		-os="openbsd" \
-		-os="solaris" \
-		-os="windows" \
-		-output="build/{{.Dir}}_$(VERSION)_{{.OS}}_{{.Arch}}/$(NAME)"
-
-package: xcompile
-	$(eval FILES := $(shell ls build))
-	@mkdir -p build/tgz
-	for f in $(FILES); do \
-		(cd $(shell pwd)/build && tar -zcvf tgz/$$f.tar.gz $$f); \
-		echo $$f; \
-	done
-
-.PHONY: all deps updatedeps build test integration xcompile package
+.PHONY: default bin dev dist integration test testrace updatedeps generate

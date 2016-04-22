@@ -3,15 +3,18 @@ sudo: false
 language: go
 
 go:
-  - 1.4
+  - 1.6
 
 branches:
   only:
     - master
 
 before_script: |-
-  wget -O consul.zip -q https://dl.bintray.com/mitchellh/consul/0.5.0_linux_amd64.zip
+  wget -O consul.zip -q https://releases.hashicorp.com/consul/0.6.4/consul_0.6.4_linux_amd64.zip
   unzip consul.zip
-  mv consul ~/bin
+  mkdir -p ~/bin
+  mv consul ~/bin/
 
-script: make integration
+script:
+  - make updatedeps
+  - make test testrace integration
