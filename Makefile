@@ -22,7 +22,7 @@ integration: generate
 
 # test runs the test suite and vets the code
 test: generate
-	go list $(TEST) | xargs -n1 go test $(TEST) $(TESTARGS) -timeout=60s -parallel=10
+	go list $(TEST) | grep -v ^github.com/hashicorp/consul-replicate/vendor/ | xargs -n1 go test $(TESTARGS) -timeout=60s -parallel=10
 
 # testrace runs the race checker
 testrace: generate
