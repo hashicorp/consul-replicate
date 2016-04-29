@@ -26,7 +26,7 @@ test: generate
 
 # testrace runs the race checker
 testrace: generate
-	go list $(TEST) | xargs -n1 go test $(TEST) $(TESTARGS) -race
+	go list $(TEST) | grep -v ^github.com/hashicorp/consul-replicate/vendor/ | xargs -n1 go test $(TESTARGS) -race
 
 # updatedeps installs all the dependencies needed to run and build - this is
 # specifically designed to only pull deps, but not self.
