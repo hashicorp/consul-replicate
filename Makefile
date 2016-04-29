@@ -33,9 +33,5 @@ testrace: generate
 updatedeps:
 	go get -u github.com/tools/godep
 	go get -u github.com/mitchellh/gox
-	go list ./... \
-		| xargs go list -f '{{ join .Deps "\n" }}{{ printf "\n" }}{{ join .TestImports "\n" }}' \
-		| grep -v github.com/hashicorp/$(NAME) \
-		| xargs go get -f -u -v
 
 .PHONY: default bin dev dist integration test testrace updatedeps generate
