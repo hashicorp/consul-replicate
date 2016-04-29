@@ -274,7 +274,8 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	}
 
 	// Get the data from the view
-	pairs, ok := view.Data.([]*dep.KeyPair)
+	data, lastIndex := view.DataAndLastIndex()
+	pairs, ok := data.([]*dep.KeyPair)
 	if !ok {
 		errCh <- fmt.Errorf("could not convert watch data")
 		return
@@ -287,7 +288,6 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
 		key := filepath.Join(prefix.Destination, pair.Key)
-
 		usedKeys[key] = struct{}{}
 
 		// Ignore if the modify index is old
@@ -303,7 +303,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 				"replicated across datacenters", key)
 		}
 
-		// Check if semaphor
+		// Check if semaphore
 		if pair.Flags == api.LockFlagValue {
 			log.Printf("[WARN] (runner) semaphore in use at %q, but sessions cannot "+
 				"be replicated across datacenters", key)
@@ -346,7 +346,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	}
 
 	// Update our status
-	status.LastReplicated = view.LastIndex
+	status.LastReplicated = lastIndex
 	status.Source = prefix.Source.Prefix
 	status.Destination = prefix.Destination
 	if err := r.setStatus(prefix, status); err != nil {

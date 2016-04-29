@@ -9,23 +9,13 @@
 		},
 		{
 			"ImportPath": "github.com/hashicorp/consul-template/dependency",
-			"Comment": "v0.14.0-15-g0e575c8",
-			"Rev": "0e575c889fb55d8721ed1e12b90299f817815a4b"
-		},
-		{
-			"ImportPath": "github.com/hashicorp/consul-template/logging",
-			"Comment": "v0.14.0-15-g0e575c8",
-			"Rev": "0e575c889fb55d8721ed1e12b90299f817815a4b"
-		},
-		{
-			"ImportPath": "github.com/hashicorp/consul-template/test",
-			"Comment": "v0.14.0-15-g0e575c8",
-			"Rev": "0e575c889fb55d8721ed1e12b90299f817815a4b"
+			"Comment": "v0.14.0-32-gc138d52",
+			"Rev": "c138d52657b7388930d31f10c61b5a7d2633ad82"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/consul-template/watch",
-			"Comment": "v0.14.0-15-g0e575c8",
-			"Rev": "0e575c889fb55d8721ed1e12b90299f817815a4b"
+			"Comment": "v0.14.0-32-gc138d52",
+			"Rev": "c138d52657b7388930d31f10c61b5a7d2633ad82"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/consul/api",

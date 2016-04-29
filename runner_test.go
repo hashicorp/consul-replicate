@@ -8,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/test"
-	"github.com/hashicorp/consul-template/watch"
 )
 
 func TestNewRunner_initialize(t *testing.T) {
@@ -64,39 +62,6 @@ func TestNewRunner_initialize(t *testing.T) {
 
 	if runner.DoneCh == nil {
 		t.Errorf("expected %#v to be %#v", runner.DoneCh, nil)
-	}
-}
-
-func TestReceive_addsToData(t *testing.T) {
-	runner, err := NewRunner(new(Config), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	prefix, err := ParsePrefix("global@nyc1")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	data := []*dep.KeyPair{
-		&dep.KeyPair{
-			Key:   "1",
-			Value: "1",
-		},
-	}
-	runner.Receive(&watch.View{
-		Dependency: prefix.Source,
-		Data:       data,
-	})
-
-	runner.RLock()
-	defer runner.RUnlock()
-	value, ok := runner.data[prefix.Source.HashCode()]
-	if !ok {
-		t.Fatalf("expected runner to have data")
-	}
-	if !reflect.DeepEqual(value.Data, data) {
-		t.Errorf("expected %q to be %q", value.Data, data)
 	}
 }
 

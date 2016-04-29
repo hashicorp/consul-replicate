@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 LOG_LEVEL="debug"
@@ -6,10 +6,18 @@ LOG_LEVEL="debug"
 DATADIR_DC1=$(mktemp -d /tmp/consul-test1.XXXXXXXXXX)
 DATADIR_DC2=$(mktemp -d /tmp/consul-test2.XXXXXXXXXX)
 
+BIND="127.0.0.1"
 PORT_DC1="8100"
 PORT_DC2="8200"
 ADDRESS_DC1="127.0.0.1:$PORT_DC1"
 ADDRESS_DC2="127.0.0.1:$PORT_DC2"
+
+function cleanup {
+    kill -9 $CONSUL_DC1_PID
+    kill -9 $CONSUL_DC2_PID
+    kill -9 $CONSUL_REPLICATE_PID
+}
+trap cleanup EXIT
 
 echo
 echo "BUILDING CONSUL REPLICATE"
@@ -30,20 +38,11 @@ consul agent \
   -server \
   -bootstrap \
   -dc dc1 \
+  -bind $BIND \
   -config-file $DATADIR_DC1/config \
   -data-dir $DATADIR_DC1 &
 CONSUL_DC1_PID=$!
 sleep 5
-
-echo
-echo "CREATING KEYS IN DC1"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/one     -d "one"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/two     -d "two"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/three   -d "three"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/four    -d "four"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/five    -d "five"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/not-global/six -d "six"
-sleep 2
 
 echo
 echo "STARTING CONSUL IN DC2"
@@ -53,6 +52,7 @@ consul agent \
   -bootstrap \
   -dc dc2 \
   -join-wan 127.0.0.1:8104 \
+  -bind $BIND \
   -config-file $DATADIR_DC2/config \
   -data-dir $DATADIR_DC2 &
 CONSUL_DC2_PID=$!
@@ -69,12 +69,19 @@ CONSUL_REPLICATE_PID=$!
 sleep 5
 
 echo
+echo "CREATING KEYS IN DC1"
+for i in `seq 1 1000`;
+do
+    curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$i -d "test data"
+done
+sleep 5
+
+echo
 echo "CHECKING DC2 FOR REPLICATION"
-curl -s $ADDRESS_DC2/v1/kv/backup/one   | grep "b25l"
-curl -s $ADDRESS_DC2/v1/kv/backup/two   | grep "dHdv"
-curl -s $ADDRESS_DC2/v1/kv/backup/three | grep "dGhyZWU="
-curl -s $ADDRESS_DC2/v1/kv/backup/four  | grep "Zm91cg=="
-curl -s $ADDRESS_DC2/v1/kv/backup/five  | grep "Zml2ZQ=="
+for i in `seq 1 1000`;
+do
+    curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
+done
 
 echo
 echo "CHECKING FOR LIVE REPLICATION"
@@ -83,9 +90,6 @@ sleep 5
 curl -s $ADDRESS_DC2/v1/kv/backup/six | grep "c2l4"
 
 echo
-kill -9 $CONSUL_DC1_PID
-kill -9 $CONSUL_DC2_PID
-kill -9 $CONSUL_REPLICATE_PID
 
 rm -rf $DATADIR_DC1
 rm -rf $DATADIR_DC2
