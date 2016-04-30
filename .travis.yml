@@ -15,6 +15,4 @@ before_script: |-
   mkdir -p ~/bin
   mv consul ~/bin/
 
-script:
-  - make updatedeps
-  - make test testrace integration
+script: make test testrace integration
