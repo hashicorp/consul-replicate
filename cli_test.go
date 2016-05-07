@@ -316,8 +316,11 @@ func TestParseFlags_prefixes(t *testing.T) {
 	if prefix.SourceRaw != "global@nyc1" {
 		t.Errorf("expected %q to be %q", prefix.SourceRaw, "global@nyc1")
 	}
-	if prefix.Destination != "backup" {
-		t.Errorf("expected %q to be %q", prefix.Destination, "backup")
+	// destination prefix must end in a slash so it will be created as a folder
+	// if it does not already exist
+	expectedDestination := "backup/"
+	if prefix.Destination != expectedDestination {
+		t.Errorf("expected %q to be %q", prefix.Destination, expectedDestination)
 	}
 }
 
