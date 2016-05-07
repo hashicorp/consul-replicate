@@ -297,7 +297,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	updates := 0
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		key := filepath.Join(prefix.Destination, pair.Key)
+		key := prefix.Destination + pair.Key
 		usedKeys[key] = struct{}{}
 
 		// Ignore if the modify index is old

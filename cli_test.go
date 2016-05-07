@@ -283,8 +283,8 @@ func TestParseFlags_prefixes(t *testing.T) {
 	}
 
 	prefix := config.Prefixes[0]
-	if prefix.Destination != "backup" {
-		t.Errorf("expected %q to be %q", prefix.Destination, "backup")
+	if prefix.Destination != "backup/" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "backup/")
 	}
 }
 

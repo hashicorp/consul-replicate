@@ -346,6 +346,13 @@ func TestParsePrefix_source(t *testing.T) {
 	if prefix.Source.Prefix != source {
 		t.Errorf("expected %q to be %q", prefix.Source.Prefix, source)
 	}
+
+	// if destination is not explicitly specified, source will be copied to destination
+	// destination may not exist, so the destination folder must end with a slash
+	expectedDestination := "global/"
+	if prefix.Destination != expectedDestination {
+		t.Errorf("expected %q to be %q", prefix.Destination, expectedDestination)
+	}
 }
 
 func TestParsePrefix_sourceSlash(t *testing.T) {
@@ -368,8 +375,8 @@ func TestParsePrefix_destination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.Destination != destination {
-		t.Errorf("expected %q to be %q", prefix.Destination, destination)
+	if prefix.Destination != "backup/" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "backup/")
 	}
 	if prefix.Source.Prefix != "global" {
 		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global")

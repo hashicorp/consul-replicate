@@ -505,6 +505,8 @@ func ParsePrefix(s string) (*Prefix, error) {
 	if destination == "" {
 		destination = source.Prefix
 	}
+	// ensure destination prefix ends with "/"
+	destination = strings.TrimSuffix(destination, "/") + "/"
 
 	return &Prefix{
 		Source:      source,
