@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -65,19 +64,6 @@ func TestNewRunner_initialize(t *testing.T) {
 	}
 }
 
-func TestConfigDefaultOverrides(t *testing.T) {
-	expected := "test/statuses"
-
-	config := &Config{
-		StatusDir: expected,
-	}
-
-	r, _ := NewRunner(config, true)
-	if r.config.StatusDir != expected {
-		t.Errorf("expected StatusDir %q to be %q", r.config.StatusDir, expected)
-	}
-}
-
 func TestBuildConfig_singleFile(t *testing.T) {
 	configFile := test.CreateTempfile([]byte(`
     consul = "127.0.0.1"
@@ -132,26 +118,6 @@ func TestBuildConfig_EmptyDirectory(t *testing.T) {
 	}
 
 	expected := "must contain at least one configuration file"
-	if !strings.Contains(err.Error(), expected) {
-		t.Fatalf("expected %q to contain %q", err.Error(), expected)
-	}
-}
-
-func TestBuildConfig_BadConfigs(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    totally not a vaild config
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	configDir := filepath.Dir(configFile.Name())
-
-	config := new(Config)
-	err := buildConfig(config, configDir)
-	if err == nil {
-		t.Fatalf("expected error, but nothing was returned")
-	}
-
-	expected := "1 error(s) occurred"
 	if !strings.Contains(err.Error(), expected) {
 		t.Fatalf("expected %q to contain %q", err.Error(), expected)
 	}
