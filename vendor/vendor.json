@@ -51,6 +51,12 @@
 			"revisionTime": "2016-04-07T17:41:26Z"
 		},
 		{
+			"checksumSHA1": "KO8DBdSp6cH8SBobHt8C0f6Lxng=",
+			"path": "github.com/hashicorp/go-gatedio",
+			"revision": "8b8de1022221dde1fb52fa25d0caab46e59c8c14",
+			"revisionTime": "2015-10-13T19:22:43Z"
+		},
+		{
 			"checksumSHA1": "lrSl49G23l6NhfilxPM0XFs5rZo=",
 			"path": "github.com/hashicorp/go-multierror",
 			"revision": "d30f09973e19c1dfcd120b2d9c4f168e68d6b5d5",
