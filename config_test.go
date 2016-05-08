@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -13,165 +14,203 @@ import (
 	"github.com/hashicorp/consul-template/watch"
 )
 
-// Test that an empty config does nothing
+func testConfig(contents string, t *testing.T) *Config {
+	f, err := ioutil.TempFile(os.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = f.Write([]byte(contents))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := ParseConfig(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config
+}
+
 func TestMerge_emptyConfig(t *testing.T) {
-	consul := "consul.io:8500"
-	config := &Config{Consul: consul}
+	config := DefaultConfig()
 	config.Merge(&Config{})
 
-	if config.Consul != consul {
-		t.Fatalf("expected %q to equal %q", config.Consul, consul)
+	expected := DefaultConfig()
+	if !reflect.DeepEqual(config, expected) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config, expected)
 	}
 }
 
-// Test that simple values are merged
-func TestMerge_simpleConfig(t *testing.T) {
-	config, newConsul := &Config{Consul: "consul.io:8500"}, "packer.io:7300"
-	config.Merge(&Config{Consul: newConsul})
+func TestMerge_topLevel(t *testing.T) {
+	config1 := testConfig(`
+		consul = "consul-1"
+		token = "token-1"
+		max_stale = "1s"
+		retry = "1s"
+		wait = "1s"
+		pid_file = "/pid-1"
+		status_dir = "service/consul/foo"
+		log_level = "log_level-1"
+	`, t)
+	config2 := testConfig(`
+		consul = "consul-2"
+		token = "token-2"
+		max_stale = "2s"
+		retry = "2s"
+		wait = "2s"
+		pid_file = "/pid-2"
+		status_dir = "service/consul/bar"
+		log_level = "log_level-2"
+	`, t)
+	config1.Merge(config2)
 
-	if config.Consul != newConsul {
-		t.Fatalf("expected %q to equal %q", config.Consul, newConsul)
+	if !reflect.DeepEqual(config1, config2) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config1, config2)
 	}
 }
 
-// Test that the flags for HTTPS are properly merged
-func TestMerge_HttpsOptions(t *testing.T) {
-	config := &Config{
-		SSL: &SSL{
-			Enabled: false,
-			Verify:  false,
-		},
-	}
-	otherConfig := &Config{
-		SSL: &SSL{
-			Enabled: true,
-			Verify:  true,
-		},
-	}
-	config.Merge(otherConfig)
+func TestMerge_auth(t *testing.T) {
+	config := testConfig(`
+		auth {
+			enabled = true
+			username = "1"
+			password = "1"
+		}
+	`, t)
+	config.Merge(testConfig(`
+		auth {
+			password = "2"
+		}
+	`, t))
 
-	if config.SSL.Enabled != true {
-		t.Errorf("expected enabled to be true")
-	}
-
-	if config.SSL.Verify != true {
-		t.Errorf("expected SSL verify to be true")
+	expected := &AuthConfig{
+		Enabled:  true,
+		Username: "1",
+		Password: "2",
 	}
 
-	config = &Config{
-		SSL: &SSL{
-			Enabled: true,
-			Verify:  true,
-		},
+	if !reflect.DeepEqual(config.Auth, expected) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config.Auth, expected)
 	}
-	otherConfig = &Config{
-		SSL: &SSL{
-			Enabled: false,
-			Verify:  false,
-		},
-	}
-	config.Merge(otherConfig)
+}
 
-	if config.SSL.Enabled != false {
-		t.Errorf("expected enabled to be false")
+func TestMerge_SSL(t *testing.T) {
+	config := testConfig(`
+		ssl {
+			enabled = true
+			verify = true
+			cert = "1.pem"
+			ca_cert = "ca-1.pem"
+		}
+	`, t)
+	config.Merge(testConfig(`
+		ssl {
+			enabled = false
+		}
+	`, t))
+
+	expected := &SSLConfig{
+		Enabled: false,
+		Verify:  true,
+		Cert:    "1.pem",
+		CaCert:  "ca-1.pem",
 	}
 
-	if config.SSL.Verify != false {
-		t.Errorf("expected SSL verify to be false")
+	if !reflect.DeepEqual(config.SSL, expected) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config.SSL, expected)
+	}
+}
+
+func TestMerge_syslog(t *testing.T) {
+	config := testConfig(`
+		syslog {
+			enabled = true
+			facility = "1"
+		}
+	`, t)
+	config.Merge(testConfig(`
+		syslog {
+			facility = "2"
+		}
+	`, t))
+
+	expected := &SyslogConfig{
+		Enabled:  true,
+		Facility: "2",
+	}
+
+	if !reflect.DeepEqual(config.Syslog, expected) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config.Syslog, expected)
 	}
 }
 
 func TestMerge_Prefixes(t *testing.T) {
-	global := &Prefix{SourceRaw: "global/config"}
-	redis := &Prefix{SourceRaw: "redis/config"}
+	config1 := testConfig(`
+		prefix {
+			source = "foo"
+			destination = "bar"
+		}
+	`, t)
+	config2 := testConfig(`
+		prefix {
+			source = "foo-2"
+			destination = "bar-2"
+		}
+	`, t)
+	config1.Merge(config2)
 
-	config := &Config{Prefixes: []*Prefix{global}}
-	otherConfig := &Config{Prefixes: []*Prefix{redis}}
-	config.Merge(otherConfig)
+	if len(config1.Prefixes) != 2 {
+		t.Fatalf("bad prefixes %d", len(config1.Prefixes))
+	}
 
-	expected := []*Prefix{global, redis}
-	if !reflect.DeepEqual(config.Prefixes, expected) {
-		t.Errorf("expected %#v to be %#v", config.Prefixes, expected)
+	if config1.Prefixes[0].Source == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[0].Source)
+	}
+	if config1.Prefixes[0].SourceRaw != "foo" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[0].SourceRaw)
+	}
+	if config1.Prefixes[0].Destination != "bar" {
+		t.Errorf("bad destination: %s", config1.Prefixes[0].Destination)
+	}
+
+	if config1.Prefixes[1].Source == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[1].Source)
+	}
+	if config1.Prefixes[1].SourceRaw != "foo-2" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[1].SourceRaw)
+	}
+	if config1.Prefixes[1].Destination != "bar-2" {
+		t.Errorf("bad destination: %s", config1.Prefixes[1].Destination)
 	}
 }
 
-func TestMerge_AuthOptions(t *testing.T) {
-	config := &Config{
-		Auth: &Auth{Username: "user", Password: "pass"},
-	}
-	otherConfig := &Config{
-		Auth: &Auth{Username: "newUser", Password: ""},
-	}
-	config.Merge(otherConfig)
+func TestMerge_wait(t *testing.T) {
+	config1 := testConfig(`
+		wait = "1s:1s"
+	`, t)
+	config2 := testConfig(`
+		wait = "2s:2s"
+	`, t)
+	config1.Merge(config2)
 
-	if config.Auth.Username != "newUser" {
-		t.Errorf("expected %q to be %q", config.Auth.Username, "newUser")
+	if !reflect.DeepEqual(config1.Wait, config2.Wait) {
+		t.Errorf("expected \n\n%#v\n\n to be \n\n%#v\n\n", config1.Wait, config2.Wait)
 	}
 }
 
-func TestMerge_SyslogOptions(t *testing.T) {
-	config := &Config{
-		Syslog: &Syslog{Enabled: false, Facility: "LOCAL0"},
-	}
-	otherConfig := &Config{
-		Syslog: &Syslog{Enabled: true, Facility: "LOCAL1"},
-	}
-	config.Merge(otherConfig)
-
-	if config.Syslog.Enabled != true {
-		t.Errorf("expected %t to be %t", config.Syslog.Enabled, true)
-	}
-
-	if config.Syslog.Facility != "LOCAL1" {
-		t.Errorf("expected %q to be %q", config.Syslog.Facility, "LOCAL1")
-	}
-}
-
-// Test that file read errors are propagated up
 func TestParseConfig_readFileError(t *testing.T) {
 	_, err := ParseConfig(path.Join(os.TempDir(), "config.json"))
 	if err == nil {
 		t.Fatal("expected error, but nothing was returned")
 	}
 
-	expectedErr := "no such file or directory"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
+	expected := "no such file or directory"
+	if !strings.Contains(err.Error(), expected) {
+		t.Fatalf("expected %q to include %q", err.Error(), expected)
 	}
 }
 
-// Test that parser errors are propagated up
-func TestParseConfig_parseFileError(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    invalid
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	_, err := ParseConfig(configFile.Name())
-	if err == nil {
-		t.Fatal("expected error, but nothing was returned")
-	}
-}
-
-// Test that mapstructure errors are propagated up
-func TestParseConfig_mapstructureError(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    consul = true
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	_, err := ParseConfig(configFile.Name())
-	if err == nil {
-		t.Fatal("expected error, but nothing was returned")
-	}
-
-	expectedErr := "nconvertible type 'bool'"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
-	}
-}
-
-// Test that the config is parsed correctly
 func TestParseConfig_correctValues(t *testing.T) {
 	configFile := test.CreateTempfile([]byte(`
     consul = "nyc1.demo.consul.io"
@@ -179,9 +218,10 @@ func TestParseConfig_correctValues(t *testing.T) {
     token = "abcd1234"
     wait = "5s:10s"
     retry = "10s"
+		pid_file = "/var/run/ct"
     log_level = "warn"
 
-    status_path = "global/statuses/replicators"
+    status_dir = "global/statuses/replicators"
 
     auth {
     	enabled = true
@@ -207,52 +247,33 @@ func TestParseConfig_correctValues(t *testing.T) {
 	}
 
 	expected := &Config{
-		Path:        configFile.Name(),
-		Consul:      "nyc1.demo.consul.io",
-		Token:       "abcd1234",
-		MaxStale:    time.Second * 5,
-		MaxStaleRaw: "5s",
-		Auth: &Auth{
+		Path:     configFile.Name(),
+		PidFile:  "/var/run/ct",
+		Consul:   "nyc1.demo.consul.io",
+		Token:    "abcd1234",
+		MaxStale: time.Second * 5,
+		Auth: &AuthConfig{
 			Enabled:  true,
 			Username: "test",
 			Password: "test",
 		},
-		AuthRaw: []*Auth{
-			&Auth{
-				Enabled:  true,
-				Username: "test",
-				Password: "test",
-			},
-		},
-		SSL: &SSL{
+		Prefixes: []*Prefix{},
+		SSL: &SSLConfig{
 			Enabled: true,
 			Verify:  false,
 		},
-		SSLRaw: []*SSL{
-			&SSL{
-				Enabled: true,
-				Verify:  false,
-			},
-		},
-		Syslog: &Syslog{
+		Syslog: &SyslogConfig{
 			Enabled:  true,
 			Facility: "LOCAL5",
-		},
-		SyslogRaw: []*Syslog{
-			&Syslog{
-				Enabled:  true,
-				Facility: "LOCAL5",
-			},
 		},
 		Wait: &watch.Wait{
 			Min: time.Second * 5,
 			Max: time.Second * 10,
 		},
-		WaitRaw:   "5s:10s",
 		Retry:     10 * time.Second,
-		RetryRaw:  "10s",
 		LogLevel:  "warn",
 		StatusDir: "global/statuses/replicators",
+		setKeys:   config.setKeys,
 	}
 
 	if !reflect.DeepEqual(config, expected) {
@@ -274,40 +295,6 @@ func TestParseConfig_parseStoreKeyPrefixError(t *testing.T) {
 	}
 
 	expectedErr := "invalid key prefix dependency format"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
-	}
-}
-
-func TestParseConfig_parseRetryError(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    retry = "bacon pants"
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	_, err := ParseConfig(configFile.Name())
-	if err == nil {
-		t.Fatal("expected error, but nothing was returned")
-	}
-
-	expectedErr := "retry invalid"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
-	}
-}
-
-func TestParseConfig_parseWaitError(t *testing.T) {
-	configFile := test.CreateTempfile([]byte(`
-    wait = "not_valid:duration"
-  `), t)
-	defer test.DeleteTempfile(configFile, t)
-
-	_, err := ParseConfig(configFile.Name())
-	if err == nil {
-		t.Fatal("expected error, but nothing was returned")
-	}
-
-	expectedErr := "wait invalid"
 	if !strings.Contains(err.Error(), expectedErr) {
 		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
 	}
@@ -356,9 +343,6 @@ func TestParsePrefix_source(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.SourceRaw != source {
-		t.Errorf("expected %q to be %q", prefix.SourceRaw, source)
-	}
 	if prefix.Source.Prefix != source {
 		t.Errorf("expected %q to be %q", prefix.Source.Prefix, source)
 	}
@@ -372,9 +356,6 @@ func TestParsePrefix_sourceSlash(t *testing.T) {
 	}
 
 	expected := "global"
-	if prefix.SourceRaw != expected {
-		t.Errorf("expected %q to be %q", prefix.SourceRaw, expected)
-	}
 	if prefix.Source.Prefix != expected {
 		t.Errorf("expected %q to be %q", prefix.Source.Prefix, expected)
 	}
@@ -387,9 +368,6 @@ func TestParsePrefix_destination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.SourceRaw != "global@nyc4" {
-		t.Errorf("expected %q to be %q", prefix.SourceRaw, "global@nyc4")
-	}
 	if prefix.Destination != destination {
 		t.Errorf("expected %q to be %q", prefix.Destination, destination)
 	}
