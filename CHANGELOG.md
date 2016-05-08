@@ -3,6 +3,18 @@ Consul Replicate Changelog
 
 # v0.2.0.dev (Unreleased)
 
+IMPROVEMENTS:
+
+  * Vendor dependencies to allow easier building from source
+  * Fix race conditions [GH-39]
+
+BUG FIXES:
+
+  * Trim leading slashes on prefixes
+  * Fix config merge ordering [GH-23]
+  * Fix a number of config-related issues [GH-43]
+  * Fix issues with keys vs. folder syncing [GH-25]
+
 # v0.2.0 (February 26, 2015)
 
 BREAKING CHANGES:
@@ -51,4 +63,3 @@ BUG FIXES:
 # v0.1.0 (June 19, 2014)
 
   * Initial release
-
