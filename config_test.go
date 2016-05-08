@@ -127,6 +127,19 @@ func TestMerge_SyslogOptions(t *testing.T) {
 	}
 }
 
+func TestMerge_Path(t *testing.T) {
+	config := &Config{}
+	path := "file/path.hcl"
+	otherConfig := &Config{
+		Path: path,
+	}
+	config.Merge(otherConfig)
+
+	if config.Path != path {
+		t.Errorf("expected config.Path (%q) to be %q", config.Path, path)
+	}
+}
+
 // Test that file read errors are propagated up
 func TestParseConfig_readFileError(t *testing.T) {
 	_, err := ParseConfig(path.Join(os.TempDir(), "config.json"))
