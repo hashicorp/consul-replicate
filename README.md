@@ -15,7 +15,7 @@ The daemon `consul-replicate` integrates with [Consul][] to perform cross-datace
 
 Installation
 ------------
-You can download a released `consul-replicate` artifact from [the Consul Replicate release page][Releases] on GitHub. If you wish to compile from source, you will need to have buildtools and [Go][] installed:
+You can download a released `consul-replicate` artifact from [the Consul Replicate release page](https://releases.hashicorp.com/consul-replicate/). If you wish to compile from source, you will need to have buildtools and [Go][] installed:
 
 ```shell
 $ git clone https://github.com/hashicorp/consul-replicate.git
