@@ -147,9 +147,6 @@ func (r *Runner) Start() {
 			//   errCh <- err
 			// }
 			log.Printf("[ERR] (runner) watcher reported error: %s", err)
-		case <-r.watcher.FinishCh:
-			log.Printf("[INFO] (runner) watcher reported finish")
-			return
 		case <-r.DoneCh:
 			log.Printf("[INFO] (runner) received finish")
 			return
