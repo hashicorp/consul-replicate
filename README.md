@@ -4,18 +4,18 @@ Consul Replicate
 [![Build Status](http://img.shields.io/travis/hashicorp/consul-replicate.svg?style=flat-square)][travis]
 
 [release]: https://github.com/hashicorp/consul-replicate/releases
-[travis]: http://travis-ci.org/hashicorp/consul-replicate
+[travis]: https://travis-ci.org/hashicorp/consul-replicate
 
-This project provides a convenient way to replicate K/V pairs across multiple [Consul][] datacenters using the `consul-replicate` daemon.
+This project provides a convenient way to replicate K/V pairs across multiple [Consul][] data centers using the `consul-replicate` daemon.
 
-The daemon `consul-replicate` integrates with [Consul][] to perform cross-datacenter K/V replication. This makes it possible to manage application configuration from a central datacenter, with low-latency asyncronous replication to other datacenters, thus avoiding the need for smart clients which would need to write to all datacenters and queue writes to handle network failures.
+The daemon `consul-replicate` integrates with [Consul][] to perform cross- K/V replication. This makes it possible to manage application configuration from a central , with low-latency asynchronous replication to other data centers, thus avoiding the need for smart clients which would need to write to all data centers and queue writes to handle network failures.
 
 **The documentation in this README corresponds to the master branch of Consul Replicate. It may contain unreleased features or different APIs than the most recently released version. Please see the Git tag that corresponds to your version of Consul Replicate for the proper documentation.**
 
 
 Installation
 ------------
-You can download a released `consul-replicate` artifact from [the Consul Replicate release page](https://releases.hashicorp.com/consul-replicate/). If you wish to compile from source, you will need to have buildtools and [Go][] installed:
+You can download a released `consul-replicate` artifact from [the Consul Replicate release page](https://releases.hashicorp.com/consul-replicate/). If you wish to compile from source, you will need to have build tools and [Go][] installed:
 
 ```shell
 $ git clone https://github.com/hashicorp/consul-replicate.git
@@ -39,7 +39,7 @@ Usage
 | `syslog`          | Send log output to syslog (in addition to stdout and stderr). The default value is false.
 | `syslog-facility` | The facility to use when sending to syslog. This requires the use of `-syslog`. The default value is `LOCAL0`.
 | `token`           | The [Consul API token][Consul ACLs]. There is no default value.
-| `prefix`*         | The source prefix including the datacenter, with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
+| `prefix`*         | The source prefix including the , with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
 | `wait`            | The `minimum(:maximum)` to wait for stability before replicating, separated by a colon (`:`). If the optional maximum value is omitted, it is assumed to be 4x the required minimum value. There is no default value.
 | `retry`           | The amount of time to wait if Consul returns an error when communicating with the API. The default value is 5 seconds.
 | `config`          | The path to a configuration file or directory of configuration files on disk, relative to the current working directory. Values specified on the CLI take precedence over values specified in the configuration file. There is no default value.
@@ -49,7 +49,7 @@ Usage
 
 \* = Required parameter
 
-Additionally. the following options are available for advanced users. It is not recommended you change these values unless you have a specific use case.
+Additionally, the following options are available for advanced users. It is not recommended you change these values unless you have a specific use case.
 
 |       Option      | Description |
 | ----------------- |------------ |
@@ -58,21 +58,21 @@ Additionally. the following options are available for advanced users. It is not 
 ### Command Line
 The CLI interface supports all of the options detailed above.
 
-Replicate all keys under "global" from the nyc1 datacenter:
+Replicate all keys under "global" from the nyc1 :
 
 ```shell
 $ consul-replicate \
   -prefix "global@nyc1"
 ```
 
-Replicate all keys under "global" from the nyc1 datacenter, renaming the key to "default" in the replicated stores:
+Replicate all keys under "global" from the nyc1 data center, renaming the key to "default" in the replicated stores:
 
 ```shell
 $ consul-replicate \
   -prefix "global@nyc1:default"
 ```
 
-Replicate all keys under "global" from the nyc1 datacenter, but do not poll or watch for changes (just do it one time):
+Replicate all keys under "global" from the nyc1 , but do not poll or watch for changes (just do it one time):
 
 ```shell
 $ consul-replicate \
@@ -129,7 +129,7 @@ If a directory is given instead of a file, all files in the directory (recursive
 
 Leader Election
 ---------------
-Early versions of [Consul Replicate][] allowed multiple instances to run per datacenter for redundancy and high-availablilty. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully failover. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
+Early versions of [Consul Replicate][] allowed multiple instances to run per  for redundancy and high-availability. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully fail over. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
 
 ```shell
 consul lock locks/replicate consul-replicate -prefix ...
@@ -201,7 +201,7 @@ This will compile the `consul-replicate` binary into `bin/consul-replicate` and 
 If you just want to run the tests:
 
 ```shell
-$ make
+$ make test
 ```
 
 Or to run a specific test in the suite:
@@ -213,10 +213,10 @@ go test ./... -run SomeTestFunction_name
 Submit Pull Requests and Issues to the [Consul Replicate project on GitHub][Consul Replicate].
 
 
-[Consul]: http://consul.io/ "Service discovery and configuration made easy"
-[leader election]: http://www.consul.io/docs/guides/leader-election.html "Consul Leader election"
+[Consul]: https://www.consul.io/ "Service discovery and configuration made easy"
+[leader election]: https://www.consul.io/docs/guides/leader-election.html "Consul Leader election"
 [Releases]: https://github.com/hashicorp/consul-replicate/releases "Consul Replicate releases page"
 [HCL]: https://github.com/hashicorp/hcl "HashiCorp Configuration Language (HCL)"
-[Go]: http://golang.org "Go the language"
-[Consul ACLs]: http://www.consul.io/docs/internals/acl.html "Consul ACLs"
+[Go]: https://golang.org "Go the language"
+[Consul ACLs]: https://www.consul.io/docs/internals/acl.html "Consul ACLs"
 [Consul Replicate]: https://github.com/hashicorp/consul-replicate "Consul Replicate on GitHub"
