@@ -495,8 +495,6 @@ func ParsePrefix(s string) (*Prefix, error) {
 		return nil, fmt.Errorf("invalid prefix declaration format")
 	}
 
-	sourceRaw = strings.TrimPrefix(sourceRaw, "/")
-
 	source, err := dep.ParseStoreKeyPrefix(sourceRaw)
 	if err != nil {
 		return nil, err

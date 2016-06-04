@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -337,40 +336,35 @@ func TestParsePrefix_tooManyArgs(t *testing.T) {
 }
 
 func TestParsePrefix_source(t *testing.T) {
-	source := "global"
-	prefix, err := ParsePrefix(source)
+	prefix, err := ParsePrefix("global")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if prefix.Source.Prefix != source {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, source)
+	if prefix.Source.Prefix != "global/" {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
 	}
 
 	// if destination is not explicitly specified, source will be copied to destination
 	// destination may not exist, so the destination folder must end with a slash
-	expectedDestination := "global/"
-	if prefix.Destination != expectedDestination {
-		t.Errorf("expected %q to be %q", prefix.Destination, expectedDestination)
+	if prefix.Destination != "global/" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "global/")
 	}
 }
 
 func TestParsePrefix_sourceSlash(t *testing.T) {
-	source := "/global"
-	prefix, err := ParsePrefix(source)
+	prefix, err := ParsePrefix("/global")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := "global"
-	if prefix.Source.Prefix != expected {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, expected)
+	if prefix.Source.Prefix != "global/" {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
 	}
 }
 
 func TestParsePrefix_destination(t *testing.T) {
-	source, destination := "global@nyc4", "backup"
-	prefix, err := ParsePrefix(fmt.Sprintf("%s:%s", source, destination))
+	prefix, err := ParsePrefix("global@nyc4:backup")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +372,7 @@ func TestParsePrefix_destination(t *testing.T) {
 	if prefix.Destination != "backup/" {
 		t.Errorf("expected %q to be %q", prefix.Destination, "backup/")
 	}
-	if prefix.Source.Prefix != "global" {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global")
+	if prefix.Source.Prefix != "global/" {
+		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
 	}
 }
