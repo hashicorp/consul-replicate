@@ -3,40 +3,40 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "Iei04/3B9IEZDhfMmeAB1K9C69o=",
+			"checksumSHA1": "zKLQNNEpgfrJOwVrDDyBMYEIx/w=",
 			"path": "github.com/fatih/structs",
-			"revision": "3fe2facc32a7fbde4b29c0f85604dc1dd22836d2",
-			"revisionTime": "2016-05-19T13:58:40Z"
+			"revision": "5ada2f449b108d87dbd8c1e60c32cdd065c27886",
+			"revisionTime": "2016-06-01T09:31:17Z"
 		},
 		{
-			"checksumSHA1": "Iy8+LIQJjbgTINhAVQ5FBSbu1Hc=",
+			"checksumSHA1": "gzHBqEfFE/EzdLugZQb/sUL+8eU=",
 			"path": "github.com/hashicorp/consul-template/dependency",
-			"revision": "50831a29d50adac2253f201f8fd91dd52f92c971",
-			"revisionTime": "2016-05-28T19:06:10Z"
+			"revision": "186f6f1d1df2e38c46cf478c4c9c49f7acfcab0a",
+			"revisionTime": "2016-06-04T08:58:18Z"
 		},
 		{
 			"checksumSHA1": "oYlqE/F2YzymKn+oSTjsj3wTG0Q=",
 			"path": "github.com/hashicorp/consul-template/logging",
-			"revision": "50831a29d50adac2253f201f8fd91dd52f92c971",
-			"revisionTime": "2016-05-28T19:06:10Z"
+			"revision": "186f6f1d1df2e38c46cf478c4c9c49f7acfcab0a",
+			"revisionTime": "2016-06-04T08:58:18Z"
 		},
 		{
 			"checksumSHA1": "faiR0aiXlDA2wOZ50CiF0JWFVmo=",
 			"path": "github.com/hashicorp/consul-template/test",
-			"revision": "50831a29d50adac2253f201f8fd91dd52f92c971",
-			"revisionTime": "2016-05-28T19:06:10Z"
+			"revision": "186f6f1d1df2e38c46cf478c4c9c49f7acfcab0a",
+			"revisionTime": "2016-06-04T08:58:18Z"
 		},
 		{
 			"checksumSHA1": "sR2e74n4zQEUDR6ssjvMr9lP7sI=",
 			"path": "github.com/hashicorp/consul-template/watch",
-			"revision": "50831a29d50adac2253f201f8fd91dd52f92c971",
-			"revisionTime": "2016-05-28T19:06:10Z"
+			"revision": "186f6f1d1df2e38c46cf478c4c9c49f7acfcab0a",
+			"revisionTime": "2016-06-04T08:58:18Z"
 		},
 		{
 			"checksumSHA1": "glOabn8rkJvz7tjz/xfX4lmt070=",
 			"path": "github.com/hashicorp/consul/api",
-			"revision": "446d76b432b6a099b2a8d899de2cd36c243e2d22",
-			"revisionTime": "2016-05-27T07:12:17Z"
+			"revision": "d4a8a43d2b600e662a50a75be70daed5fad8dd2d",
+			"revisionTime": "2016-06-04T06:35:46Z"
 		},
 		{
 			"checksumSHA1": "cdOCt0Yb+hdErz8NAQqayxPmRsY=",
@@ -141,10 +141,10 @@
 			"revisionTime": "2016-05-25T23:17:25Z"
 		},
 		{
-			"checksumSHA1": "x+SNyR4AXyXyKhiJOu/SJ+wqwcM=",
+			"checksumSHA1": "DfNlTjY37bPV0+mm++p1sh9JUiM=",
 			"path": "github.com/hashicorp/vault/api",
-			"revision": "f0b06cf68a3a6d69d0572be23f5035c38d1f3539",
-			"revisionTime": "2016-05-27T22:07:12Z"
+			"revision": "ddd365ff4bcf400700733f3c0575be173be3841d",
+			"revisionTime": "2016-06-03T23:38:51Z"
 		},
 		{
 			"checksumSHA1": "Lnv1MZJu56aDzs5/EebdCuq3OFI=",
