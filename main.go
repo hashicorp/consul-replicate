@@ -11,7 +11,7 @@ var GitCommit string
 
 const Name = "consul-replicate"
 const Version = "0.2.0"
-const VersionPrerelease = "dev"
+const VersionPrerelease = ""
 
 func main() {
 	cli := NewCLI(os.Stdout, os.Stderr)
