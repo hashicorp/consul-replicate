@@ -1,7 +1,9 @@
 Consul Replicate Changelog
 ==========================
 
-# v0.2.0 (June 9, 2016)
+## v0.2.1.dev (Unreleased)
+
+## v0.2.0 (June 9, 2016)
 
 IMPROVEMENTS:
 
@@ -15,7 +17,7 @@ BUG FIXES:
   * Fix a number of config-related issues [GH-43]
   * Fix issues with keys vs. folder syncing [GH-25]
 
-# v0.2.0 (February 26, 2015)
+## v0.2.0 (February 26, 2015)
 
 BREAKING CHANGES:
 
