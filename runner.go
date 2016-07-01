@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-multierror"
+	"strings"
 )
 
 // Regexp for invalid characters in keys
@@ -188,7 +189,7 @@ func (r *Runner) Run() error {
 
 	// Replicate each prefix in a goroutine
 	for _, prefix := range prefixes {
-		go r.replicate(prefix, doneCh, errCh)
+		go r.replicate(prefix, r.config.Excludes, doneCh, errCh)
 	}
 
 	var errs *multierror.Error
@@ -256,7 +257,7 @@ func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan error) {
+func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.client.Agent().Self()
 	if err != nil {
@@ -300,6 +301,22 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	for _, pair := range pairs {
 		key := prefix.Destination + pair.Key
 		usedKeys[key] = struct{}{}
+
+		// Ignore if the key falls under an excluded prefix
+		if len(excludes) > 0 {
+			excluded := false
+			for _, exclude := range excludes {
+				if strings.HasPrefix(key, exclude.Source) {
+					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding"+
+						key, exclude.Source)
+					excluded = true
+				}
+			}
+
+			if excluded {
+				continue
+			}
+		}
 
 		// Ignore if the modify index is old
 		if pair.ModifyIndex <= status.LastReplicated {

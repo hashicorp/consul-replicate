@@ -40,6 +40,7 @@ Usage
 | `syslog-facility` | The facility to use when sending to syslog. This requires the use of `-syslog`. The default value is `LOCAL0`.
 | `token`           | The [Consul API token][Consul ACLs]. There is no default value.
 | `prefix`*         | The source prefix including the , with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
+| `exclude`*        | A prefix to exclude replication of. This option is additive and may be specified multiple times for multiple prefixes to replicate.
 | `wait`            | The `minimum(:maximum)` to wait for stability before replicating, separated by a colon (`:`). If the optional maximum value is omitted, it is assumed to be 4x the required minimum value. There is no default value.
 | `retry`           | The amount of time to wait if Consul returns an error when communicating with the API. The default value is 5 seconds.
 | `config`          | The path to a configuration file or directory of configuration files on disk, relative to the current working directory. Values specified on the CLI take precedence over values specified in the configuration file. There is no default value.
@@ -119,6 +120,10 @@ prefix {
 
 prefix {
   // Multiple prefix definitions are supported
+}
+
+exclude {
+  source = "vault/core/lock"
 }
 ```
 

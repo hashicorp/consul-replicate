@@ -33,6 +33,9 @@ type Config struct {
 	// Prefixes is the list of key prefix dependencies.
 	Prefixes []*Prefix `mapstructure:"prefix"`
 
+	// Excludes is the list of key prefixes to exclude from replication.
+	Excludes []*Exclude `mapstructure:"exclude"`
+
 	// Auth is the HTTP basic authentication for communicating with Consul.
 	Auth *AuthConfig `mapstructure:"auth"`
 
@@ -112,6 +115,13 @@ func (c *Config) Copy() *Config {
 			Source:      p.Source,
 			SourceRaw:   p.SourceRaw,
 			Destination: p.Destination,
+		}
+	}
+
+	config.Excludes = make([]*Exclude, len(c.Excludes))
+	for i, p := range c.Excludes {
+		config.Excludes[i] = &Exclude{
+			Source:      p.Source,
 		}
 	}
 
@@ -220,6 +230,18 @@ func (c *Config) Merge(config *Config) {
 				Source:      prefix.Source,
 				SourceRaw:   prefix.SourceRaw,
 				Destination: prefix.Destination,
+			})
+		}
+	}
+
+	if config.Excludes != nil {
+		if c.Excludes == nil {
+			c.Excludes = []*Exclude{}
+		}
+
+		for _, exclude := range config.Excludes {
+			c.Excludes = append(c.Excludes, &Exclude{
+				Source:      exclude.Source,
 			})
 		}
 	}
@@ -375,6 +397,7 @@ func DefaultConfig() *Config {
 		},
 		LogLevel:  logLevel,
 		Prefixes:  []*Prefix{},
+		Excludes:  []*Exclude{},
 		Retry:     5 * time.Second,
 		StatusDir: "service/consul-replicate/statuses",
 		Wait: &watch.Wait{
@@ -474,6 +497,11 @@ type Prefix struct {
 	Source      *dep.StoreKeyPrefix `mapstructure:"-"`
 	SourceRaw   string              `mapstructure:"source"`
 	Destination string              `mapstructure:"destination"`
+}
+
+// Exclude is a key path prefix to exclude from replication
+type Exclude struct {
+	Source string `mapstructure:"source"`
 }
 
 // ParsePrefix parses a prefix of the format "source@dc:destination" into the

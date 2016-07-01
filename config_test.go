@@ -257,6 +257,7 @@ func TestParseConfig_correctValues(t *testing.T) {
 			Password: "test",
 		},
 		Prefixes: []*Prefix{},
+		Excludes: []*Exclude{},
 		SSL: &SSLConfig{
 			Enabled: true,
 			Verify:  false,
