@@ -363,7 +363,21 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 		return
 	}
 	for _, key := range localKeys {
-		if _, ok := usedKeys[key]; !ok {
+		excluded := false
+
+		// Ignore if the key falls under an excluded prefix
+		if len(excludes) > 0 {
+			sourceKey := strings.Replace(key, prefix.Destination, prefix.Source.Prefix, -1)
+			for _, exclude := range excludes {
+				if strings.HasPrefix(sourceKey, exclude.Source) {
+					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
+						sourceKey, exclude.Source)
+					excluded = true
+				}
+			}
+		}
+
+		if _, ok := usedKeys[key]; !ok && !excluded {
 			if _, err := kv.Delete(key, nil); err != nil {
 				errCh <- fmt.Errorf("failed to delete %q: %s", key, err)
 				return

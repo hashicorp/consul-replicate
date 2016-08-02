@@ -121,7 +121,7 @@ func (c *Config) Copy() *Config {
 	config.Excludes = make([]*Exclude, len(c.Excludes))
 	for i, p := range c.Excludes {
 		config.Excludes[i] = &Exclude{
-			Source:      p.Source,
+			Source: p.Source,
 		}
 	}
 
@@ -241,7 +241,7 @@ func (c *Config) Merge(config *Config) {
 
 		for _, exclude := range config.Excludes {
 			c.Excludes = append(c.Excludes, &Exclude{
-				Source:      exclude.Source,
+				Source: exclude.Source,
 			})
 		}
 	}

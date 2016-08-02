@@ -392,7 +392,6 @@ Options:
                            omitted, it is assumed to be the same as the source
   -exclude=<src>           Provides a prefix to exclude from replication
   
-                           omitted, it is assumed to be the same as the source
   -wait=<duration>         Sets the 'minumum(:maximum)' amount of time to wait
                            before replicating
   -retry=<duration>        The amount of time to wait if Consul returns an
