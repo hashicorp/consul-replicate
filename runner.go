@@ -306,9 +306,9 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 		if len(excludes) > 0 {
 			excluded := false
 			for _, exclude := range excludes {
-				if strings.HasPrefix(key, exclude.Source) {
-					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding"+
-						key, exclude.Source)
+				if strings.HasPrefix(pair.Path, exclude.Source) {
+					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding",
+						pair.Path, exclude.Source)
 					excluded = true
 				}
 			}

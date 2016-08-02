@@ -184,6 +184,32 @@ func TestMerge_Prefixes(t *testing.T) {
 	}
 }
 
+func TestMerge_Excludes(t *testing.T) {
+	config1 := testConfig(`
+		exclude {
+			source = "foo"
+		}
+	`, t)
+	config2 := testConfig(`
+		exclude {
+			source = "foo-2"
+		}
+	`, t)
+	config1.Merge(config2)
+
+	if len(config1.Excludes) != 2 {
+		t.Fatalf("bad excludes %d", len(config1.Excludes))
+	}
+
+	if config1.Excludes[0].Source != "foo" {
+		t.Errorf("bad source: %#v", config1.Excludes[0].Source)
+	}
+
+	if config1.Excludes[1].Source != "foo-2" {
+		t.Errorf("bad source: %#v", config1.Excludes[1].Source)
+	}
+}
+
 func TestMerge_wait(t *testing.T) {
 	config1 := testConfig(`
 		wait = "1s:1s"

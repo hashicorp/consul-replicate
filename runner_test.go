@@ -15,6 +15,9 @@ func TestNewRunner_initialize(t *testing.T) {
 			&Prefix{SourceRaw: "3", Destination: "6"},
 			&Prefix{SourceRaw: "4", Destination: "7"},
 		},
+		Excludes: []*Exclude{
+			&Exclude{Source: "3"},
+		},
 	}
 
 	runner, err := NewRunner(config, once)

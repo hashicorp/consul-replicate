@@ -64,6 +64,7 @@ echo $CONSUL_REPLICATE_BIN
 $CONSUL_REPLICATE_BIN \
   -consul $ADDRESS_DC2 \
   -prefix "global@dc1:backup" \
+  -exclude "global/555" \
   -log-level $LOG_LEVEL &
 CONSUL_REPLICATE_PID=$!
 sleep 5
@@ -80,7 +81,11 @@ echo
 echo "CHECKING DC2 FOR REPLICATION"
 for i in `seq 1 1000`;
 do
-    curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
+    if [ $i -ne "555" ]; then
+        curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
+    else
+        curl -sw '%{http_code}' $ADDRESS_DC2/v1/kv/backup/$i | grep "404"
+    fi
 done
 
 echo
