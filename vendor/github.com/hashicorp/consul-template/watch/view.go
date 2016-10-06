@@ -89,8 +89,6 @@ func (v *View) poll(viewCh chan<- *View, errCh chan<- error) {
 			currentRetry = defaultRetry
 
 			log.Printf("[INFO] (view) %s received data", v.display())
-
-			log.Printf("[INFO] (view) %s received data", v.display())
 			select {
 			case <-v.stopCh:
 			case viewCh <- v:

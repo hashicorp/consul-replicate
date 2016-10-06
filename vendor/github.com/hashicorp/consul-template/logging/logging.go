@@ -61,7 +61,6 @@ func Setup(config *Config) error {
 		logOutput = io.MultiWriter(logFilter)
 	}
 
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC)
 	log.SetOutput(logOutput)
 
 	return nil

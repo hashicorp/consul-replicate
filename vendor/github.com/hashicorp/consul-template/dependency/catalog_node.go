@@ -29,7 +29,6 @@ type NodeService struct {
 	Service string
 	Tags    ServiceTags
 	Port    int
-	Address string
 }
 
 // CatalogNode represents a single node from the Consul catalog.
@@ -112,7 +111,6 @@ func (d *CatalogNode) Fetch(clients *ClientSet, opts *QueryOptions) (interface{}
 			Service: v.Service,
 			Tags:    ServiceTags(deepCopyAndSortTags(v.Tags)),
 			Port:    v.Port,
-			Address: v.Address,
 		})
 	}
 	sort.Stable(services)

@@ -3,11 +3,8 @@ package dependency
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
-
-	vaultapi "github.com/hashicorp/vault/api"
 )
 
 // Secret is a vault secret.
@@ -26,7 +23,6 @@ type VaultSecret struct {
 	sync.Mutex
 
 	Path   string
-	data   map[string]interface{}
 	secret *Secret
 
 	stopped bool
@@ -65,7 +61,7 @@ func (d *VaultSecret) Fetch(clients *ClientSet, opts *QueryOptions) (interface{}
 	// Grab the vault client
 	vault, err := clients.Vault()
 	if err != nil {
-		return nil, nil, ErrWithExitf("vault secret: %s", err)
+		return nil, nil, fmt.Errorf("vault secret: %s", err)
 	}
 
 	// Attempt to renew the secret. If we do not have a secret or if that secret
@@ -92,19 +88,14 @@ func (d *VaultSecret) Fetch(clients *ClientSet, opts *QueryOptions) (interface{}
 		}
 
 		// The renewal failed for some reason.
-		log.Printf("[WARN] (%s) failed to renew, re-obtaining: %s", d.Display(), err)
+		log.Printf("[WARN] (%s) failed to renew, re-reading: %s", d.Display(), err)
 	}
 
 	// If we got this far, we either didn't have a secret to renew, the secret was
 	// not renewable, or the renewal failed, so attempt a fresh read.
-	var vaultSecret *vaultapi.Secret
-	if len(d.data) == 0 {
-		vaultSecret, err = vault.Logical().Read(d.Path)
-	} else {
-		vaultSecret, err = vault.Logical().Write(d.Path, d.data)
-	}
+	vaultSecret, err := vault.Logical().Read(d.Path)
 	if err != nil {
-		return nil, nil, ErrWithExitf("error obtaining from vault: %s", err)
+		return nil, nil, fmt.Errorf("error reading from vault: %s", err)
 	}
 
 	// The secret could be nil (maybe it does not exist yet). This is not an error
@@ -159,31 +150,9 @@ func (d *VaultSecret) Stop() {
 }
 
 // ParseVaultSecret creates a new datacenter dependency.
-func ParseVaultSecret(s ...string) (*VaultSecret, error) {
-	if len(s) == 0 {
-		return nil, fmt.Errorf("expected 1 or more arguments, got %d", len(s))
-	}
-
-	path, rest := s[0], s[1:len(s)]
-
-	if len(path) == 0 {
-		return nil, fmt.Errorf("vault path must be at least one character")
-	}
-
-	data := make(map[string]interface{})
-	for _, str := range rest {
-		parts := strings.SplitN(str, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid value %q - must be key=value", str)
-		}
-
-		k, v := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-		data[k] = v
-	}
-
+func ParseVaultSecret(s string) (*VaultSecret, error) {
 	vs := &VaultSecret{
-		Path:   path,
-		data:   data,
+		Path:   s,
 		stopCh: make(chan struct{}),
 	}
 	return vs, nil
