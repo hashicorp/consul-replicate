@@ -100,7 +100,6 @@ func (r *Runner) Start() {
 		r.ErrCh <- err
 		return
 	}
-
 	// Add the dependencies to the watcher
 	for _, prefix := range r.config.Prefixes {
 		r.watcher.Add(prefix.Source)
@@ -153,8 +152,14 @@ func (r *Runner) Start() {
 
 		// If we got this far, that means we got new data or one of the timers
 		// fired, so attempt to run.
-		if err := r.Run(); err != nil {
+		received, err := r.Run()
+		if err != nil {
 			r.ErrCh <- err
+			return
+		}
+		if r.once && received == r.watcher.Size() {
+			log.Printf("[INFO] (runner) %v/%v watchers done", received, r.watcher.Size())
+			r.DoneCh <- struct{}{}
 			return
 		}
 	}
@@ -179,11 +184,11 @@ func (r *Runner) Receive(view *watch.View) {
 }
 
 // Run invokes a single pass of the runner.
-func (r *Runner) Run() error {
+func (r *Runner) Run() (count int, err error) {
 	log.Printf("[INFO] (runner) running")
 
 	prefixes := r.config.Prefixes
-	doneCh := make(chan struct{}, len(prefixes))
+	doneCh := make(chan bool, len(prefixes))
 	errCh := make(chan error, len(prefixes))
 
 	// Replicate each prefix in a goroutine
@@ -194,14 +199,16 @@ func (r *Runner) Run() error {
 	var errs *multierror.Error
 	for i := 0; i < len(prefixes); i++ {
 		select {
-		case <-doneCh:
+		case gotit := <-doneCh:
+			if gotit {
+				count++
+			}
 			// OK
 		case err := <-errCh:
 			errs = multierror.Append(errs, err)
 		}
 	}
-
-	return errs.ErrorOrNil()
+	return count, errs.ErrorOrNil()
 }
 
 // init creates the Runner's underlying data structures and returns an error if
@@ -256,7 +263,7 @@ func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan error) {
+func (r *Runner) replicate(prefix *Prefix, doneCh chan bool, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.client.Agent().Self()
 	if err != nil {
@@ -280,7 +287,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	view, ok := r.get(prefix)
 	if !ok {
 		log.Printf("[INFO] (runner) no data for %q", prefix.Source.Display())
-		doneCh <- struct{}{}
+		doneCh <- false
 		return
 	}
 
@@ -370,7 +377,7 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan struct{}, errCh chan erro
 	}
 
 	// We are done!
-	doneCh <- struct{}{}
+	doneCh <- true
 }
 
 // getStatus is used to read the last replication status.
