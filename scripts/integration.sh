@@ -11,6 +11,7 @@ PORT_DC1="8100"
 PORT_DC2="8200"
 ADDRESS_DC1="127.0.0.1:$PORT_DC1"
 ADDRESS_DC2="127.0.0.1:$PORT_DC2"
+EXCLUDED_KEY=555
 
 function cleanup {
     kill -9 $CONSUL_DC1_PID
@@ -64,6 +65,7 @@ echo $CONSUL_REPLICATE_BIN
 $CONSUL_REPLICATE_BIN \
   -consul $ADDRESS_DC2 \
   -prefix "global@dc1:backup" \
+  -exclude "global/$EXCLUDED_KEY" \
   -log-level $LOG_LEVEL &
 CONSUL_REPLICATE_PID=$!
 sleep 5
@@ -80,7 +82,11 @@ echo
 echo "CHECKING DC2 FOR REPLICATION"
 for i in `seq 1 1000`;
 do
-    curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
+    if [ $i -ne "$EXCLUDED_KEY" ]; then
+        curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
+    else
+        curl -sw '%{http_code}' $ADDRESS_DC2/v1/kv/backup/$i | grep "404"
+    fi
 done
 
 echo
@@ -90,6 +96,16 @@ sleep 5
 curl -s $ADDRESS_DC2/v1/kv/backup/six | grep "c2l4"
 
 echo
+echo "WRITING KEY IN DC2"
+curl -s -o /dev/null -X PUT $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete -d "don't delete"
+sleep 5
+
+echo "UPDATING PREFIX IN DC1"
+curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$EXCLUDED_KEY -d "test data"
+sleep 5
+
+echo "CHECKING THAT KEY STILL EXISTS IN DC2"
+curl -s $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete | grep "ZG9uJ3QgZGVsZXRl"
 
 rm -rf $DATADIR_DC1
 rm -rf $DATADIR_DC2
