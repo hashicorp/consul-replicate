@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-multierror"
+	"strings"
 )
 
 // Regexp for invalid characters in keys
@@ -193,7 +194,7 @@ func (r *Runner) Run() (count int, err error) {
 
 	// Replicate each prefix in a goroutine
 	for _, prefix := range prefixes {
-		go r.replicate(prefix, doneCh, errCh)
+		go r.replicate(prefix, r.config.Excludes, doneCh, errCh)
 	}
 
 	var errs *multierror.Error
@@ -263,7 +264,7 @@ func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *Prefix, doneCh chan bool, errCh chan error) {
+func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan bool, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.client.Agent().Self()
 	if err != nil {
@@ -307,6 +308,22 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan bool, errCh chan error) {
 	for _, pair := range pairs {
 		key := prefix.Destination + pair.Key
 		usedKeys[key] = struct{}{}
+
+		// Ignore if the key falls under an excluded prefix
+		if len(excludes) > 0 {
+			excluded := false
+			for _, exclude := range excludes {
+				if strings.HasPrefix(pair.Path, exclude.Source) {
+					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding",
+						pair.Path, exclude.Source)
+					excluded = true
+				}
+			}
+
+			if excluded {
+				continue
+			}
+		}
 
 		// Ignore if the modify index is old
 		if pair.ModifyIndex <= status.LastReplicated {
@@ -353,7 +370,21 @@ func (r *Runner) replicate(prefix *Prefix, doneCh chan bool, errCh chan error) {
 		return
 	}
 	for _, key := range localKeys {
-		if _, ok := usedKeys[key]; !ok {
+		excluded := false
+
+		// Ignore if the key falls under an excluded prefix
+		if len(excludes) > 0 {
+			sourceKey := strings.Replace(key, prefix.Destination, prefix.Source.Prefix, -1)
+			for _, exclude := range excludes {
+				if strings.HasPrefix(sourceKey, exclude.Source) {
+					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
+						sourceKey, exclude.Source)
+					excluded = true
+				}
+			}
+		}
+
+		if _, ok := usedKeys[key]; !ok && !excluded {
 			if _, err := kv.Delete(key, nil); err != nil {
 				errCh <- fmt.Errorf("failed to delete %q: %s", key, err)
 				return

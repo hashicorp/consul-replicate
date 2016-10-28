@@ -241,6 +241,14 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 		return nil
 	}), "prefix", "")
 
+	flags.Var((funcVar)(func(s string) error {
+		if config.Excludes == nil {
+			config.Excludes = make([]*Exclude, 0, 1)
+		}
+		config.Excludes = append(config.Excludes, &Exclude{Source: s})
+		return nil
+	}), "exclude", "")
+
 	flags.Var((funcBoolVar)(func(b bool) error {
 		config.Syslog.Enabled = b
 		config.set("syslog")
@@ -382,6 +390,8 @@ Options:
                            datacenter and optionally the destination prefix in
                            the destination datacenters - if the destination is
                            omitted, it is assumed to be the same as the source
+  -exclude=<src>           Provides a prefix to exclude from replication
+  
   -wait=<duration>         Sets the 'minumum(:maximum)' amount of time to wait
                            before replicating
   -retry=<duration>        The amount of time to wait if Consul returns an
