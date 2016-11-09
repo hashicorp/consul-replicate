@@ -15,11 +15,12 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-multierror"
-	"strings"
 )
 
 // Regexp for invalid characters in keys
@@ -156,6 +157,12 @@ func (r *Runner) Start() {
 		// fired, so attempt to run.
 		if err := r.Run(); err != nil {
 			r.ErrCh <- err
+			return
+		}
+
+		if r.once {
+			log.Printf("[INFO] (runner) run finished and -once is set, exiting")
+			r.DoneCh <- struct{}{}
 			return
 		}
 	}
