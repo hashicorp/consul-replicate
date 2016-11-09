@@ -3,6 +3,14 @@ Consul Replicate Changelog
 
 ## v0.2.1.dev (Unreleased)
 
+IMPROVEMENTS:
+
+  * Add an `-exclude` option to exclude certain prefixes from replication. [GH-51]
+
+BUG FIXES:
+
+  * Fix -once mode never terminating. [GH-57]
+
 ## v0.2.0 (June 9, 2016)
 
 IMPROVEMENTS:
