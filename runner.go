@@ -108,6 +108,21 @@ func (r *Runner) Start() {
 		r.watcher.Add(prefix.Source)
 	}
 
+	// If once mode is on, wait until we get data back from all the views before proceeding
+	onceCh := make(chan struct{}, 1)
+	if r.once {
+		for i := 0; i < len(r.config.Prefixes); i++ {
+			select {
+			case view := <-r.watcher.DataCh:
+				r.Receive(view)
+			case err := <-r.watcher.ErrCh:
+				r.ErrCh <- err
+				return
+			}
+		}
+		onceCh <- struct{}{}
+	}
+
 	for {
 		select {
 		case view := <-r.watcher.DataCh:
@@ -151,6 +166,7 @@ func (r *Runner) Start() {
 		case <-r.DoneCh:
 			log.Printf("[INFO] (runner) received finish")
 			return
+		case <-onceCh:
 		}
 
 		// If we got this far, that means we got new data or one of the timers

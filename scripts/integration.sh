@@ -60,23 +60,21 @@ CONSUL_DC2_PID=$!
 sleep 5
 
 echo
-echo "STARTING CONSUL-REPLICATE"
-echo $CONSUL_REPLICATE_BIN
-$CONSUL_REPLICATE_BIN \
-  -consul $ADDRESS_DC2 \
-  -prefix "global@dc1:backup" \
-  -exclude "global/$EXCLUDED_KEY" \
-  -log-level $LOG_LEVEL &
-CONSUL_REPLICATE_PID=$!
-sleep 5
-
-echo
 echo "CREATING KEYS IN DC1"
 for i in `seq 1 1000`;
 do
     curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$i -d "test data"
 done
 sleep 5
+
+echo "STARTING CONSUL-REPLICATE WITH -once"
+echo $CONSUL_REPLICATE_BIN
+$CONSUL_REPLICATE_BIN \
+  -consul $ADDRESS_DC2 \
+  -prefix "global@dc1:backup" \
+  -exclude "global/$EXCLUDED_KEY" \
+  -log-level $LOG_LEVEL \
+  -once
 
 echo
 echo "CHECKING DC2 FOR REPLICATION"
@@ -88,6 +86,17 @@ do
         curl -sw '%{http_code}' $ADDRESS_DC2/v1/kv/backup/$i | grep "404"
     fi
 done
+
+echo
+echo "STARTING CONSUL-REPLICATE"
+echo $CONSUL_REPLICATE_BIN
+$CONSUL_REPLICATE_BIN \
+  -consul $ADDRESS_DC2 \
+  -prefix "global@dc1:backup" \
+  -exclude "global/$EXCLUDED_KEY" \
+  -log-level $LOG_LEVEL &
+CONSUL_REPLICATE_PID=$!
+sleep 5
 
 echo
 echo "CHECKING FOR LIVE REPLICATION"
