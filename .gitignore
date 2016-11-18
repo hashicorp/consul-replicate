@@ -26,3 +26,7 @@ _testmain.go
 
 /bin
 /pkg
+
+# Vim
+*.swp
+*.swo
