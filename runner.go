@@ -465,7 +465,8 @@ func (r *Runner) statusPath(prefix *Prefix) string {
 	plain := fmt.Sprintf("%s-%s", prefix.Source.Prefix, prefix.Destination)
 	hash := md5.Sum([]byte(plain))
 	enc := hex.EncodeToString(hash[:])
-	return filepath.Join(r.config.StatusDir, enc)
+	statusPath := filepath.Join(r.config.StatusDir, enc)
+	return strings.Replace(statusPath, "\\", "/", -1) 
 }
 
 // storePid is used to write out a PID file to disk.
