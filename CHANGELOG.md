@@ -1,7 +1,18 @@
 Consul Replicate Changelog
 ==========================
 
-## v0.2.1.dev (Unreleased)
+## v0.3.0 (January 17, 2017)
+
+BREAKING CHANGES:
+
+  - It is no longer assumed that you want to mirror a "folder". If you want to
+    mirror a folder (for example, all keys in `foo@dc1` to `foo@dc2`), you
+    should specify dependencies using a trailing slash in the keys (`foo/@dc1`,
+    `foo/@dc2`) moving forward. The new behavior allows replication for any key
+    beginning with the prefix. For example, a configuration of
+    `global@dc1:backup` would match anything in the `global/` folder, but it
+    would also match a key named `globalization`, creating `backupization` in
+    the target data center. [GH-54]
 
 IMPROVEMENTS:
 
