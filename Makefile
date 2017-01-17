@@ -29,8 +29,8 @@ test: generate
 		| grep -v "github.com/hashicorp/${NAME}/vendor" \
 		| xargs -n1 go test -timeout=60s -parallel=10 ${TESTARGS}
 
-# testrace runs the race checker
-testrace: generate
+# test-race runs the race checker
+test-race: generate
 	@echo "==> Running tests (race)..."
 	@go list $(TEST) \
 		| grep -v "github.com/hashicorp/${NAME}/vendor" \
@@ -56,4 +56,4 @@ bootstrap:
 		go get -u "$$t"; \
 	done
 
-.PHONY: default bin dev dist integration test testrace updatedeps vet generate bootstrap
+.PHONY: default bin dev dist integration test test-race updatedeps vet generate bootstrap
