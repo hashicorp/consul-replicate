@@ -1,6 +1,10 @@
 Consul Replicate Changelog
 ==========================
 
+## v0.3.1.dev (Unreleased)
+
+BUG FIXES:
+
 ## v0.3.0 (January 17, 2017)
 
 BREAKING CHANGES:
