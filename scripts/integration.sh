@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-LOG_LEVEL="debug"
+LOG_LEVEL="ERR"
 
 DATADIR_DC1=$(mktemp -d /tmp/consul-test1.XXXXXXXXXX)
 DATADIR_DC2=$(mktemp -d /tmp/consul-test2.XXXXXXXXXX)
@@ -11,64 +11,61 @@ PORT_DC1="8100"
 PORT_DC2="8200"
 ADDRESS_DC1="127.0.0.1:$PORT_DC1"
 ADDRESS_DC2="127.0.0.1:$PORT_DC2"
-EXCLUDED_KEY=555
+EXCLUDED_KEY=5
 
 function cleanup {
-    kill -9 $CONSUL_DC1_PID
-    kill -9 $CONSUL_DC2_PID
-    kill -9 $CONSUL_REPLICATE_PID
+  kill -9 $CONSUL_DC1_PID  &> /dev/null
+  kill -9 $CONSUL_DC2_PID  &> /dev/null
+  kill -9 $CONSUL_REPLICATE_PID  &> /dev/null
 }
 trap cleanup EXIT
 
+echo "--> Printing test information..."
 echo
-echo "BUILDING CONSUL REPLICATE"
+echo "  DATADIR_DC1: $DATADIR_DC1"
+echo "  DATADIR_DC2: $DATADIR_DC2"
+echo "  ADDRESS_DC1: $ADDRESS_DC1"
+echo "  ADDRESS_DC2: $ADDRESS_DC2"
+echo
+
+echo "--> Building Consul Replicate..."
 CONSUL_REPLICATE_BIN=$(mktemp /tmp/consul-replicate.XXXXXXXXXX)
 go build -o $CONSUL_REPLICATE_BIN
 
-echo
-echo "LOG_LEVEL: $LOG_LEVEL"
-echo "DATADIR_DC1: $DATADIR_DC1"
-echo "DATADIR_DC2: $DATADIR_DC2"
-echo "ADDRESS_DC1: $ADDRESS_DC1"
-echo "ADDRESS_DC2: $ADDRESS_DC2"
-
-echo
-echo "STARTING CONSUL IN DC1"
+echo "--> Starting Consul in DC1..."
 echo "{\"ports\": {\"http\": $PORT_DC1, \"dns\": 8101, \"rpc\": 8102, \"serf_lan\": 8103, \"serf_wan\": 8104, \"server\": 8105}}" > $DATADIR_DC1/config
 consul agent \
   -server \
   -bootstrap \
-  -dc dc1 \
+  -datacenter dc1 \
   -bind $BIND \
   -config-file $DATADIR_DC1/config \
-  -data-dir $DATADIR_DC1 &
+  -log-level=err \
+  -data-dir $DATADIR_DC1 &> /dev/null &
 CONSUL_DC1_PID=$!
-sleep 5
+sleep 3
 
-echo
-echo "STARTING CONSUL IN DC2"
+echo "--> Starting Consul in DC2..."
 echo "{\"ports\": {\"http\": $PORT_DC2, \"dns\": 8201, \"rpc\": 8202, \"serf_lan\": 8203, \"serf_wan\": 8204, \"server\": 8205}}" > $DATADIR_DC2/config
 consul agent \
   -server \
   -bootstrap \
-  -dc dc2 \
+  -datacenter dc2 \
   -join-wan 127.0.0.1:8104 \
   -bind $BIND \
   -config-file $DATADIR_DC2/config \
-  -data-dir $DATADIR_DC2 &
+  -log-level=err \
+  -data-dir $DATADIR_DC2 &> /dev/null &
 CONSUL_DC2_PID=$!
-sleep 5
+sleep 3
 
-echo
-echo "CREATING KEYS IN DC1"
-for i in `seq 1 1000`;
-do
-    curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$i -d "test data"
+echo "--> Creating keys in DC1..."
+for i in `seq 1 10`; do
+  consul kv put -http-addr="$ADDRESS_DC1" "global/$i" "test data" > /dev/null
 done
-sleep 5
+consul kv put -http-addr="$ADDRESS_DC1" "globalization" "test data" > /dev/null
 
-echo "STARTING CONSUL-REPLICATE WITH -once"
-echo $CONSUL_REPLICATE_BIN
+echo "--> Starting consul-replicate with -once..."
 $CONSUL_REPLICATE_BIN \
   -consul $ADDRESS_DC2 \
   -prefix "global@dc1:backup" \
@@ -76,45 +73,44 @@ $CONSUL_REPLICATE_BIN \
   -log-level $LOG_LEVEL \
   -once
 
-echo
-echo "CHECKING DC2 FOR REPLICATION"
-for i in `seq 1 1000`;
-do
-    if [ $i -ne "$EXCLUDED_KEY" ]; then
-        curl -s $ADDRESS_DC2/v1/kv/backup/$i | grep "dGVzdCBkYXRh"
-    else
-        curl -sw '%{http_code}' $ADDRESS_DC2/v1/kv/backup/$i | grep "404"
-    fi
+echo "--> Checking for DC2 replication..."
+for i in `seq 1 10`; do
+  printf "    backup/$i... "
+  if [ $i -ne "$EXCLUDED_KEY" ]; then
+    consul kv get -http-addr="$ADDRESS_DC2" "backup/$i" | grep -q "test data"
+  else
+    consul kv get -http-addr="$ADDRESS_DC2" "backup/$i" | grep -q "Error!"
+  fi
+  echo "OK!"
 done
+consul kv get -http-addr="$ADDRESS_DC2" "backupization" | grep -q "test data"
 
-echo
-echo "STARTING CONSUL-REPLICATE"
-echo $CONSUL_REPLICATE_BIN
+echo "--> Starting consul-replicate as a service..."
 $CONSUL_REPLICATE_BIN \
   -consul $ADDRESS_DC2 \
   -prefix "global@dc1:backup" \
   -exclude "global/$EXCLUDED_KEY" \
   -log-level $LOG_LEVEL &
 CONSUL_REPLICATE_PID=$!
-sleep 5
+sleep 3
 
-echo
-echo "CHECKING FOR LIVE REPLICATION"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/six -d "six"
-sleep 5
-curl -s $ADDRESS_DC2/v1/kv/backup/six | grep "c2l4"
+echo "--> Checking for live replication..."
+curl -sLo /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/six -d "six"
+sleep 3
+curl -sL $ADDRESS_DC2/v1/kv/backup/six | grep -q "c2l4"
 
-echo
-echo "WRITING KEY IN DC2"
-curl -s -o /dev/null -X PUT $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete -d "don't delete"
-sleep 5
+echo "    Writing a key in DC2"
+curl -sLo /dev/null -X PUT $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete -d "don't delete"
+sleep 3
 
-echo "UPDATING PREFIX IN DC1"
-curl -s -o /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$EXCLUDED_KEY -d "test data"
-sleep 5
+echo "    Updating prefix in DC1"
+curl -sLo /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/$EXCLUDED_KEY -d "test data"
+sleep 3
 
-echo "CHECKING THAT KEY STILL EXISTS IN DC2"
-curl -s $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete | grep "ZG9uJ3QgZGVsZXRl"
+echo "    Checking key still exists in DC2"
+curl -sL $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete | grep -q "ZG9uJ3QgZGVsZXRl"
 
 rm -rf $DATADIR_DC1
 rm -rf $DATADIR_DC2
+
+echo "--> Done!"

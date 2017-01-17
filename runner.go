@@ -2,13 +2,12 @@ package main
 
 import (
 	"crypto/md5"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"net/http"
+	"math"
 	"os"
 	"regexp"
 	"sync"
@@ -20,6 +19,7 @@ import (
 	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-multierror"
+	"github.com/pkg/errors"
 )
 
 // Regexp for invalid characters in keys
@@ -50,10 +50,10 @@ type Runner struct {
 	config *Config
 
 	// client is the consul/api client.
-	client *api.Client
+	clients *dep.ClientSet
 
 	// data is the internal storage engine for this runner with the key being the
-	// HashCode() for the dependency and the result being the view that holds the
+	// String() for the dependency and the result being the view that holds the
 	// data.
 	data map[string]*watch.View
 
@@ -104,7 +104,7 @@ func (r *Runner) Start() {
 
 	// Add the dependencies to the watcher
 	for _, prefix := range r.config.Prefixes {
-		r.watcher.Add(prefix.Source)
+		r.watcher.Add(prefix.Dependency)
 	}
 
 	// If once mode is on, wait until we get data back from all the views before proceeding
@@ -112,9 +112,9 @@ func (r *Runner) Start() {
 	if r.once {
 		for i := 0; i < len(r.config.Prefixes); i++ {
 			select {
-			case view := <-r.watcher.DataCh:
+			case view := <-r.watcher.DataCh():
 				r.Receive(view)
-			case err := <-r.watcher.ErrCh:
+			case err := <-r.watcher.ErrCh():
 				r.ErrCh <- err
 				return
 			}
@@ -124,14 +124,14 @@ func (r *Runner) Start() {
 
 	for {
 		select {
-		case view := <-r.watcher.DataCh:
+		case view := <-r.watcher.DataCh():
 			r.Receive(view)
 
 			// Drain all views that have data
 		OUTER:
 			for {
 				select {
-				case view = <-r.watcher.DataCh:
+				case view = <-r.watcher.DataCh():
 					r.Receive(view)
 				default:
 					break OUTER
@@ -139,11 +139,11 @@ func (r *Runner) Start() {
 			}
 
 			// If we are waiting for quiescence, setup the timers
-			if r.config.Wait.Min != 0 && r.config.Wait.Max != 0 {
+			if *r.config.Wait.Min != 0 && *r.config.Wait.Max != 0 {
 				log.Printf("[INFO] (runner) quiescence timers starting")
-				r.minTimer = time.After(r.config.Wait.Min)
+				r.minTimer = time.After(*r.config.Wait.Min)
 				if r.maxTimer == nil {
-					r.maxTimer = time.After(r.config.Wait.Max)
+					r.maxTimer = time.After(*r.config.Wait.Max)
 				}
 				continue
 			}
@@ -153,15 +153,9 @@ func (r *Runner) Start() {
 		case <-r.maxTimer:
 			log.Printf("[INFO] (runner) quiescence maxTimer fired")
 			r.minTimer, r.maxTimer = nil, nil
-		case err := <-r.watcher.ErrCh:
-			// Intentionally do not send the error back up to the runner. Eventually,
-			// once Consul API implements errwrap and multierror, we can check the
-			// "type" of error and conditionally alert back.
-			//
-			// if err.Contains(Something) {
-			//   errCh <- err
-			// }
+		case err := <-r.watcher.ErrCh():
 			log.Printf("[ERR] (runner) watcher reported error: %s", err)
+			r.ErrCh <- err
 		case <-r.DoneCh:
 			log.Printf("[INFO] (runner) received finish")
 			return
@@ -198,7 +192,7 @@ func (r *Runner) Stop() {
 func (r *Runner) Receive(view *watch.View) {
 	r.Lock()
 	defer r.Unlock()
-	r.data[view.Dependency.HashCode()] = view
+	r.data[view.Dependency().String()] = view
 }
 
 // Run invokes a single pass of the runner.
@@ -244,14 +238,14 @@ func (r *Runner) init() error {
 		result)
 
 	// Create the client
-	client, err := newAPIClient(r.config)
+	clients, err := newClientSet(r.config)
 	if err != nil {
 		return fmt.Errorf("runner: %s", err)
 	}
-	r.client = client
+	r.clients = clients
 
 	// Create the watcher
-	watcher, err := newWatcher(r.config, client, r.once)
+	watcher, err := newWatcher(r.config, clients, r.once)
 	if err != nil {
 		return fmt.Errorf("runner: %s", err)
 	}
@@ -272,7 +266,7 @@ func (r *Runner) init() error {
 func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 	r.RLock()
 	defer r.RUnlock()
-	result, ok := r.data[prefix.Source.HashCode()]
+	result, ok := r.data[prefix.Dependency.String()]
 	return result, ok
 }
 
@@ -281,13 +275,13 @@ func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 // expensive and needs to be parallelized.
 func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
-	info, err := r.client.Agent().Self()
+	info, err := r.clients.Consul().Agent().Self()
 	if err != nil {
 		errCh <- fmt.Errorf("failed to query agent: %s", err)
 		return
 	}
 	localDatacenter := info["Config"]["Datacenter"].(string)
-	if localDatacenter == prefix.Source.DataCenter {
+	if localDatacenter == prefix.DataCenter {
 		errCh <- fmt.Errorf("local datacenter cannot be the source datacenter")
 		return
 	}
@@ -302,7 +296,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 	// Get the prefix data
 	view, ok := r.get(prefix)
 	if !ok {
-		log.Printf("[INFO] (runner) no data for %q", prefix.Source.Display())
+		log.Printf("[INFO] (runner) no data for %q", prefix.Dependency)
 		doneCh <- struct{}{}
 		return
 	}
@@ -315,13 +309,13 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 		return
 	}
 
-	kv := r.client.KV()
+	kv := r.clients.Consul().KV()
 
 	// Update keys to the most recent versions
 	updates := 0
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		key := prefix.Destination + pair.Key
+		key := prefix.Destination + strings.TrimPrefix(pair.Path, prefix.Source)
 		usedKeys[key] = struct{}{}
 
 		// Ignore if the key falls under an excluded prefix
@@ -389,7 +383,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 
 		// Ignore if the key falls under an excluded prefix
 		if len(excludes) > 0 {
-			sourceKey := strings.Replace(key, prefix.Destination, prefix.Source.Prefix, -1)
+			sourceKey := strings.Replace(key, prefix.Destination, prefix.Source, -1)
 			for _, exclude := range excludes {
 				if strings.HasPrefix(sourceKey, exclude.Source) {
 					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
@@ -411,7 +405,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 
 	// Update our status
 	status.LastReplicated = lastIndex
-	status.Source = prefix.Source.Prefix
+	status.Source = prefix.Source
 	status.Destination = prefix.Destination
 	if err := r.setStatus(prefix, status); err != nil {
 		errCh <- fmt.Errorf("failed to checkpoint status: %s", err)
@@ -428,7 +422,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 
 // getStatus is used to read the last replication status.
 func (r *Runner) getStatus(prefix *Prefix) (*Status, error) {
-	kv := r.client.KV()
+	kv := r.clients.Consul().KV()
 	pair, _, err := kv.Get(r.statusPath(prefix), nil)
 	if err != nil {
 		return nil, err
@@ -452,7 +446,7 @@ func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
 	}
 
 	// Put the key to Consul.
-	kv := r.client.KV()
+	kv := r.clients.Consul().KV()
 	_, err = kv.Put(&api.KVPair{
 		Key:   r.statusPath(prefix),
 		Value: enc,
@@ -461,7 +455,7 @@ func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
 }
 
 func (r *Runner) statusPath(prefix *Prefix) string {
-	plain := fmt.Sprintf("%s-%s", prefix.Source.Prefix, prefix.Destination)
+	plain := fmt.Sprintf("%s-%s", prefix.Source, prefix.Destination)
 	hash := md5.Sum([]byte(plain))
 	enc := hex.EncodeToString(hash[:])
 	return strings.TrimRight(r.config.StatusDir, "/") + "/" + enc
@@ -514,80 +508,54 @@ func (r *Runner) deletePid() error {
 	return nil
 }
 
-// newAPIClient creates a new API client from the given config and
-func newAPIClient(config *Config) (*api.Client, error) {
-	log.Printf("[INFO] (runner) creating consul/api client")
+// newClientSet creates a new client set from the given config.
+func newClientSet(c *Config) (*dep.ClientSet, error) {
+	clients := dep.NewClientSet()
 
-	consulConfig := api.DefaultConfig()
-
-	if config.Consul != "" {
-		log.Printf("[DEBUG] (runner) setting address to %s", config.Consul)
-		consulConfig.Address = config.Consul
+	if err := clients.CreateConsulClient(&dep.CreateConsulClientInput{
+		Address:      c.Consul,
+		Token:        c.Token,
+		AuthEnabled:  c.Auth.Enabled,
+		AuthUsername: c.Auth.Username,
+		AuthPassword: c.Auth.Password,
+		SSLEnabled:   c.SSL.Enabled,
+		SSLVerify:    c.SSL.Verify,
+		SSLCert:      c.SSL.Cert,
+		SSLKey:       c.SSL.Key,
+		SSLCACert:    c.SSL.CaCert,
+		SSLCAPath:    c.SSL.CaPath,
+		ServerName:   c.SSL.ServerName,
+	}); err != nil {
+		return nil, fmt.Errorf("runner: %s", err)
 	}
 
-	if config.Token != "" {
-		log.Printf("[DEBUG] (runner) setting token to %s", config.Token)
-		consulConfig.Token = config.Token
-	}
-
-	if config.SSL.Enabled {
-		log.Printf("[DEBUG] (runner) enabling SSL")
-		consulConfig.Scheme = "https"
-	}
-
-	if !config.SSL.Verify {
-		log.Printf("[WARN] (runner) disabling SSL verification")
-		consulConfig.HttpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	}
-
-	if config.Auth != nil {
-		log.Printf("[DEBUG] (runner) setting basic auth")
-		consulConfig.HttpAuth = &api.HttpBasicAuth{
-			Username: config.Auth.Username,
-			Password: config.Auth.Password,
-		}
-	}
-
-	client, err := api.NewClient(consulConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	return clients, nil
 }
 
 // newWatcher creates a new watcher.
-func newWatcher(config *Config, client *api.Client, once bool) (*watch.Watcher, error) {
-	log.Printf("[INFO] (runner) creating Watcher")
+func newWatcher(c *Config, clients *dep.ClientSet, once bool) (*watch.Watcher, error) {
+	log.Printf("[INFO] (runner) creating watcher")
 
-	clients := dep.NewClientSet()
-	if err := clients.CreateConsulClient(&dep.CreateConsulClientInput{
-		Address:      config.Consul,
-		Token:        config.Token,
-		AuthEnabled:  config.Auth.Enabled,
-		AuthUsername: config.Auth.Username,
-		AuthPassword: config.Auth.Password,
-		SSLEnabled:   config.SSL.Enabled,
-		SSLVerify:    config.SSL.Verify,
-	}); err != nil {
-		return nil, err
-	}
+	w, err := watch.NewWatcher(&watch.NewWatcherInput{
+		Clients:    clients,
+		MaxStale:   c.MaxStale,
+		Once:       once,
+		RenewVault: false,
+		RetryFuncConsul: func(retry int) (bool, time.Duration) {
+			if retry > 5 {
+				return false, 0
+			}
 
-	watcher, err := watch.NewWatcher(&watch.WatcherConfig{
-		Clients:  clients,
-		Once:     once,
-		MaxStale: config.MaxStale,
-		RetryFunc: func(current time.Duration) time.Duration {
-			return config.Retry
+			base := math.Pow(2, float64(retry))
+			sleep := time.Duration(base) * c.Retry
+
+			return true, sleep
 		},
+		RetryFuncDefault: nil,
+		RetryFuncVault:   nil,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "runner")
 	}
-
-	return watcher, err
+	return w, nil
 }

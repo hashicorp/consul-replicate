@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/consul-template/test"
-	"github.com/hashicorp/consul-template/watch"
 )
 
 func testConfig(contents string, t *testing.T) *Config {
@@ -163,21 +163,21 @@ func TestMerge_Prefixes(t *testing.T) {
 		t.Fatalf("bad prefixes %d", len(config1.Prefixes))
 	}
 
-	if config1.Prefixes[0].Source == nil {
-		t.Errorf("bad source: %#v", config1.Prefixes[0].Source)
+	if config1.Prefixes[0].Dependency == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[0].Dependency)
 	}
-	if config1.Prefixes[0].SourceRaw != "foo" {
-		t.Errorf("bad source_raw: %s", config1.Prefixes[0].SourceRaw)
+	if config1.Prefixes[0].Source != "foo" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[0].Source)
 	}
 	if config1.Prefixes[0].Destination != "bar" {
 		t.Errorf("bad destination: %s", config1.Prefixes[0].Destination)
 	}
 
-	if config1.Prefixes[1].Source == nil {
-		t.Errorf("bad source: %#v", config1.Prefixes[1].Source)
+	if config1.Prefixes[1].Dependency == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[1].Dependency)
 	}
-	if config1.Prefixes[1].SourceRaw != "foo-2" {
-		t.Errorf("bad source_raw: %s", config1.Prefixes[1].SourceRaw)
+	if config1.Prefixes[1].Source != "foo-2" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[1].Source)
 	}
 	if config1.Prefixes[1].Destination != "bar-2" {
 		t.Errorf("bad destination: %s", config1.Prefixes[1].Destination)
@@ -266,7 +266,7 @@ func TestParseConfig_correctValues(t *testing.T) {
   `), t)
 	defer test.DeleteTempfile(configFile, t)
 
-	config, err := ParseConfig(configFile.Name())
+	c, err := ParseConfig(configFile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,18 +292,18 @@ func TestParseConfig_correctValues(t *testing.T) {
 			Enabled:  true,
 			Facility: "LOCAL5",
 		},
-		Wait: &watch.Wait{
-			Min: time.Second * 5,
-			Max: time.Second * 10,
+		Wait: &config.WaitConfig{
+			Min: config.TimeDuration(time.Second * 5),
+			Max: config.TimeDuration(time.Second * 10),
 		},
 		Retry:     10 * time.Second,
 		LogLevel:  "warn",
 		StatusDir: "global/statuses/replicators",
-		setKeys:   config.setKeys,
+		setKeys:   c.setKeys,
 	}
 
-	if !reflect.DeepEqual(config, expected) {
-		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, config)
+	if !reflect.DeepEqual(c, expected) {
+		t.Fatalf("expected \n%#v\n\n, got \n\n%#v\n\n", expected, c)
 	}
 }
 
@@ -320,7 +320,7 @@ func TestParseConfig_parseStoreKeyPrefixError(t *testing.T) {
 		t.Fatal("expected error, but nothing was returned")
 	}
 
-	expectedErr := "invalid key prefix dependency format"
+	expectedErr := "invalid format"
 	if !strings.Contains(err.Error(), expectedErr) {
 		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
 	}
@@ -350,32 +350,20 @@ func TestParsePrefix_stringWithSpacesArgs(t *testing.T) {
 	}
 }
 
-func TestParsePrefix_tooManyArgs(t *testing.T) {
-	_, err := ParsePrefix("foo:bar:blitz:baz")
-	if err == nil {
-		t.Fatal("expected error, but nothing was returned")
-	}
-
-	expectedErr := "invalid prefix declaration format"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("expected error %q to contain %q", err.Error(), expectedErr)
-	}
-}
-
 func TestParsePrefix_source(t *testing.T) {
 	prefix, err := ParsePrefix("global")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if prefix.Source.Prefix != "global/" {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
+	if prefix.Source != "global" {
+		t.Errorf("expected %q to be %q", prefix.Source, "global")
 	}
 
 	// if destination is not explicitly specified, source will be copied to destination
 	// destination may not exist, so the destination folder must end with a slash
-	if prefix.Destination != "global/" {
-		t.Errorf("expected %q to be %q", prefix.Destination, "global/")
+	if prefix.Destination != "global" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "global")
 	}
 }
 
@@ -385,8 +373,8 @@ func TestParsePrefix_sourceSlash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.Source.Prefix != "global/" {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
+	if prefix.Source != "global" {
+		t.Errorf("expected %q to be %q", prefix.Source, "global")
 	}
 }
 
@@ -396,10 +384,10 @@ func TestParsePrefix_destination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if prefix.Destination != "backup/" {
-		t.Errorf("expected %q to be %q", prefix.Destination, "backup/")
+	if prefix.Destination != "backup" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "backup")
 	}
-	if prefix.Source.Prefix != "global/" {
-		t.Errorf("expected %q to be %q", prefix.Source.Prefix, "global/")
+	if prefix.Source != "global" {
+		t.Errorf("expected %q to be %q", prefix.Source, "global")
 	}
 }

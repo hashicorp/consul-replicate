@@ -1,5 +1,5 @@
 // The mapstructure package exposes functionality to convert an
-// abitrary map[string]interface{} into a native Go structure.
+// arbitrary map[string]interface{} into a native Go structure.
 //
 // The Go structure can be arbitrarily complex, containing slices,
 // other structs, etc. and the decoder will properly decode nested
@@ -8,6 +8,7 @@
 package mapstructure
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -246,6 +247,10 @@ func (d *Decoder) decode(name string, data interface{}, val reflect.Value) error
 // value to "data" of that type.
 func (d *Decoder) decodeBasic(name string, data interface{}, val reflect.Value) error {
 	dataVal := reflect.ValueOf(data)
+	if !dataVal.IsValid() {
+		dataVal = reflect.Zero(val.Type())
+	}
+
 	dataValType := dataVal.Type()
 	if !dataValType.AssignableTo(val.Type()) {
 		return fmt.Errorf(
@@ -302,6 +307,7 @@ func (d *Decoder) decodeString(name string, data interface{}, val reflect.Value)
 func (d *Decoder) decodeInt(name string, data interface{}, val reflect.Value) error {
 	dataVal := reflect.ValueOf(data)
 	dataKind := getKind(dataVal)
+	dataType := dataVal.Type()
 
 	switch {
 	case dataKind == reflect.Int:
@@ -323,6 +329,14 @@ func (d *Decoder) decodeInt(name string, data interface{}, val reflect.Value) er
 		} else {
 			return fmt.Errorf("cannot parse '%s' as int: %s", name, err)
 		}
+	case dataType.PkgPath() == "encoding/json" && dataType.Name() == "Number":
+		jn := data.(json.Number)
+		i, err := jn.Int64()
+		if err != nil {
+			return fmt.Errorf(
+				"error decoding json.Number into %s: %s", name, err)
+		}
+		val.SetInt(i)
 	default:
 		return fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -409,6 +423,7 @@ func (d *Decoder) decodeBool(name string, data interface{}, val reflect.Value) e
 func (d *Decoder) decodeFloat(name string, data interface{}, val reflect.Value) error {
 	dataVal := reflect.ValueOf(data)
 	dataKind := getKind(dataVal)
+	dataType := dataVal.Type()
 
 	switch {
 	case dataKind == reflect.Int:
@@ -430,6 +445,14 @@ func (d *Decoder) decodeFloat(name string, data interface{}, val reflect.Value) 
 		} else {
 			return fmt.Errorf("cannot parse '%s' as float: %s", name, err)
 		}
+	case dataType.PkgPath() == "encoding/json" && dataType.Name() == "Number":
+		jn := data.(json.Number)
+		i, err := jn.Float64()
+		if err != nil {
+			return fmt.Errorf(
+				"error decoding json.Number into %s: %s", name, err)
+		}
+		val.SetFloat(i)
 	default:
 		return fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -523,7 +546,12 @@ func (d *Decoder) decodePtr(name string, data interface{}, val reflect.Value) er
 	// into that. Then set the value of the pointer to this type.
 	valType := val.Type()
 	valElemType := valType.Elem()
-	realVal := reflect.New(valElemType)
+
+	realVal:=val
+	if realVal.IsNil() || d.config.ZeroFields {
+		realVal = reflect.New(valElemType)
+	}
+
 	if err := d.decode(name, data, reflect.Indirect(realVal)); err != nil {
 		return err
 	}
@@ -539,20 +567,24 @@ func (d *Decoder) decodeSlice(name string, data interface{}, val reflect.Value) 
 	valElemType := valType.Elem()
 	sliceType := reflect.SliceOf(valElemType)
 
-	// Check input type
-	if dataValKind != reflect.Array && dataValKind != reflect.Slice {
-		// Accept empty map instead of array/slice in weakly typed mode
-		if d.config.WeaklyTypedInput && dataVal.Kind() == reflect.Map && dataVal.Len() == 0 {
-			val.Set(reflect.MakeSlice(sliceType, 0, 0))
-			return nil
-		} else {
-			return fmt.Errorf(
-				"'%s': source data must be an array or slice, got %s", name, dataValKind)
-		}
-	}
+	valSlice:=val
+	if valSlice.IsNil() || d.config.ZeroFields {
 
-	// Make a new slice to hold our result, same size as the original data.
-	valSlice := reflect.MakeSlice(sliceType, dataVal.Len(), dataVal.Len())
+		// Check input type
+		if dataValKind != reflect.Array && dataValKind != reflect.Slice {
+			// Accept empty map instead of array/slice in weakly typed mode
+			if d.config.WeaklyTypedInput && dataVal.Kind() == reflect.Map && dataVal.Len() == 0 {
+				val.Set(reflect.MakeSlice(sliceType, 0, 0))
+				return nil
+			} else {
+				return fmt.Errorf(
+					"'%s': source data must be an array or slice, got %s", name, dataValKind)
+			}
+		}
+
+		// Make a new slice to hold our result, same size as the original data.
+		valSlice = reflect.MakeSlice(sliceType, dataVal.Len(), dataVal.Len())
+	}
 
 	// Accumulate any errors
 	errors := make([]string, 0)
@@ -628,14 +660,6 @@ func (d *Decoder) decodeStruct(name string, data interface{}, val reflect.Value)
 			fieldType := structType.Field(i)
 			fieldKind := fieldType.Type.Kind()
 
-			if fieldType.Anonymous {
-				if fieldKind != reflect.Struct {
-					errors = appendErrors(errors,
-						fmt.Errorf("%s: unsupported type: %s", fieldType.Name, fieldKind))
-					continue
-				}
-			}
-
 			// If "squash" is specified in the tag, we squash the field down.
 			squash := false
 			tagParts := strings.Split(fieldType.Tag.Get(d.config.TagName), ",")
@@ -675,7 +699,7 @@ func (d *Decoder) decodeStruct(name string, data interface{}, val reflect.Value)
 		if !rawMapVal.IsValid() {
 			// Do a slower search by iterating over each key and
 			// doing case-insensitive search.
-			for dataValKey, _ := range dataValKeys {
+			for dataValKey := range dataValKeys {
 				mK, ok := dataValKey.Interface().(string)
 				if !ok {
 					// Not a string key
@@ -723,7 +747,7 @@ func (d *Decoder) decodeStruct(name string, data interface{}, val reflect.Value)
 
 	if d.config.ErrorUnused && len(dataValKeysUnused) > 0 {
 		keys := make([]string, 0, len(dataValKeysUnused))
-		for rawKey, _ := range dataValKeysUnused {
+		for rawKey := range dataValKeysUnused {
 			keys = append(keys, rawKey.(string))
 		}
 		sort.Strings(keys)
@@ -738,7 +762,7 @@ func (d *Decoder) decodeStruct(name string, data interface{}, val reflect.Value)
 
 	// Add the unused keys to the list of unused keys if we're tracking metadata
 	if d.config.Metadata != nil {
-		for rawKey, _ := range dataValKeysUnused {
+		for rawKey := range dataValKeysUnused {
 			key := rawKey.(string)
 			if name != "" {
 				key = fmt.Sprintf("%s.%s", name, key)
