@@ -36,6 +36,9 @@ Usage
 | `max-stale`       | The maximum staleness of a query. If specified, Consul will distribute work among all servers instead of just the leader. The default value is 0 (none).
 | `ssl`             | Use HTTPS while talking to Consul. Requires the Consul server to be configured to serve secure connections. The default value is false.
 | `ssl-verify`      | Verify certificates when connecting via SSL. This requires the use of `-ssl`. The default value is true.
+| `ssl-cert`        | SSL certificate to use for authenticating with Consul. This requires the use of `-ssl`
+| `ssl-key`         | SSL certificate key to use for authenticating with Consul. This requires the use of `-ssl`
+| `ssl-ca-cert`     | CACert to use to verify the Consul certificate. This requires the use of `-ssl`
 | `syslog`          | Send log output to syslog (in addition to stdout and stderr). The default value is false.
 | `syslog-facility` | The facility to use when sending to syslog. This requires the use of `-syslog`. The default value is `LOCAL0`.
 | `token`           | The [Consul API token][Consul ACLs]. There is no default value.
@@ -111,6 +114,8 @@ auth {
 ssl {
   enabled = true
   verify = false
+  cert = "/path/to/my/cert"
+  key = "/path/to/my/key"
 }
 
 syslog {

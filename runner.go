@@ -3,10 +3,12 @@ package main
 import (
 	"crypto/md5"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -533,15 +535,47 @@ func newAPIClient(config *Config) (*api.Client, error) {
 	if config.SSL.Enabled {
 		log.Printf("[DEBUG] (runner) enabling SSL")
 		consulConfig.Scheme = "https"
-	}
 
-	if !config.SSL.Verify {
-		log.Printf("[WARN] (runner) disabling SSL verification")
-		consulConfig.HttpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+		var tlsConfig tls.Config
+
+		// Custom certificate or certificate and key
+		if config.SSL.Cert != "" && config.SSL.Key != "" {
+			log.Printf("[DEBUG] (runner) loading ssl cert %s and ssl key %s", config.SSL.Cert, config.SSL.Key)
+			cert, err := tls.LoadX509KeyPair(config.SSL.Cert, config.SSL.Key)
+			if err != nil {
+				return nil, fmt.Errorf("runner: Could not load certificate: %s", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		} else if config.SSL.Cert != "" {
+			log.Printf("[DEBUG] (runner) loading ssl cert and key from %s", config.SSL.Cert)
+			cert, err := tls.LoadX509KeyPair(config.SSL.Cert, config.SSL.Cert)
+			if err != nil {
+				return nil, fmt.Errorf("runner: Could not load certificate: %s", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
+
+		// Custom CA certificate
+		if config.SSL.CaCert != "" {
+			cacert, err := ioutil.ReadFile(config.SSL.CaCert)
+			if err != nil {
+				return nil, fmt.Errorf("runner: Could not read cacert: %s", err)
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(cacert)
+
+			tlsConfig.RootCAs = caCertPool
+		}
+
+		// Construct all the certificates now
+		tlsConfig.BuildNameToCertificate()
+
+		if !config.SSL.Verify {
+			log.Printf("[WARN] (runner) disabling SSL verification")
+			tlsConfig.InsecureSkipVerify = true
+		}
+
+		consulConfig.HttpClient.Transport = &http.Transport{TLSClientConfig: &tlsConfig}
 	}
 
 	if config.Auth != nil {
@@ -571,8 +605,11 @@ func newWatcher(config *Config, client *api.Client, once bool) (*watch.Watcher, 
 		AuthEnabled:  config.Auth.Enabled,
 		AuthUsername: config.Auth.Username,
 		AuthPassword: config.Auth.Password,
+		SSLCert:      config.SSL.Cert,
+		SSLKey:	      config.SSL.Key,
 		SSLEnabled:   config.SSL.Enabled,
 		SSLVerify:    config.SSL.Verify,
+		SSLCACert:    config.SSL.CaCert,
 	}); err != nil {
 		return nil, err
 	}
