@@ -533,14 +533,14 @@ func ParsePrefix(s string) (*Prefix, error) {
 		return nil, fmt.Errorf("invalid format: %q", s)
 	}
 
-	if source != "" && !dep.KVListQueryRe.MatchString(source) {
+	if source == "" || !dep.KVListQueryRe.MatchString(source) {
 		return nil, fmt.Errorf("invalid format: %q", s)
 	}
 	m := regexpMatch(dep.KVListQueryRe, source)
 	prefix := m["prefix"]
 	dc := m["dc"]
 
-	d, err := dep.NewKVListQuery(prefix)
+	d, err := dep.NewKVListQuery(source)
 	if err != nil {
 		return nil, err
 	}

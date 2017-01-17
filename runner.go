@@ -315,7 +315,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 	updates := 0
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		key := prefix.Destination + pair.Key
+		key := prefix.Destination + strings.TrimPrefix(pair.Path, prefix.Source)
 		usedKeys[key] = struct{}{}
 
 		// Ignore if the key falls under an excluded prefix
