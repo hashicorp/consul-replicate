@@ -5,7 +5,7 @@ CURRENT_DIR := $(CURRENT_DIR:/=)
 
 # Get the project metadata
 GOVERSION := 1.7.4
-VERSION := 0.2.1-dev
+VERSION := 0.3.0
 PROJECT := github.com/hashicorp/consul-replicate
 OWNER := $(dir $(PROJECT))
 OWNER := $(notdir $(OWNER:/=))
@@ -150,7 +150,7 @@ docker-push:
 	@docker push "${OWNER}/${NAME}:${VERSION}"
 
 # integration runs the integration tests
-integration: 
+integration:
 	@sh -c "'$(CURDIR)/scripts/integration.sh'"
 
 # test runs the test suite
