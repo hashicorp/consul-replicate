@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/consul-template/logging"
-	"github.com/hashicorp/consul-template/watch"
 )
 
 // Exit codes are int values that represent an exit code for a particular error.
@@ -58,34 +58,34 @@ func NewCLI(out, err io.Writer) *CLI {
 // status from the command.
 func (cli *CLI) Run(args []string) int {
 	// Parse the flags
-	config, once, version, err := cli.parseFlags(args[1:])
+	c, once, version, err := cli.parseFlags(args[1:])
 	if err != nil {
 		return cli.handleError(err, ExitCodeParseFlagsError)
 	}
 
 	// Save original config (defaults + parsed flags) for handling reloads
-	baseConfig := config.Copy()
+	baseConfig := c.Copy()
 
 	// Setup the config and logging
-	config, err = cli.setup(config)
+	c, err = cli.setup(c)
 	if err != nil {
 		return cli.handleError(err, ExitCodeConfigError)
 	}
 
 	// Print version information for debugging
-	log.Printf("[INFO] %s", formattedVersion())
+	log.Printf("[INFO] %s", humanVersion)
 
 	// If the version was requested, return an "error" containing the version
 	// information. This might sound weird, but most *nix applications actually
 	// print their version on stderr anyway.
 	if version {
 		log.Printf("[DEBUG] (cli) version flag was given, exiting now")
-		fmt.Fprintf(cli.errStream, "%s\n", formattedVersion())
+		fmt.Fprintf(cli.errStream, "%s\n", humanVersion)
 		return ExitCodeOK
 	}
 
 	// Initial runner
-	runner, err := NewRunner(config, once)
+	runner, err := NewRunner(c, once)
 	if err != nil {
 		return cli.handleError(err, ExitCodeRunnerError)
 	}
@@ -117,12 +117,12 @@ func (cli *CLI) Run(args []string) int {
 				runner.Stop()
 
 				// Load the new configuration from disk
-				config, err = cli.setup(baseConfig)
+				c, err = cli.setup(baseConfig)
 				if err != nil {
 					return cli.handleError(err, ExitCodeConfigError)
 				}
 
-				runner, err = NewRunner(config, once)
+				runner, err = NewRunner(c, once)
 				if err != nil {
 					return cli.handleError(err, ExitCodeRunnerError)
 				}
@@ -153,7 +153,7 @@ func (cli *CLI) stop() {
 // much easier and cleaner.
 func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 	var once, version bool
-	config := DefaultConfig()
+	c := DefaultConfig()
 
 	// Parse the flags and options
 	flags := flag.NewFlagSet(Name, flag.ContinueOnError)
@@ -161,71 +161,85 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 	flags.Usage = func() { fmt.Fprintf(cli.errStream, usage, Name) }
 
 	flags.Var((funcVar)(func(s string) error {
-		config.Consul = s
-		config.set("consul")
+		c.Consul = s
+		c.set("consul")
 		return nil
 	}), "consul", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.Token = s
-		config.set("token")
+		c.Token = s
+		c.set("token")
 		return nil
 	}), "token", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.Auth.Enabled = true
-		config.set("auth.enabled")
+		c.Auth.Enabled = true
+		c.set("auth.enabled")
 		if strings.Contains(s, ":") {
 			split := strings.SplitN(s, ":", 2)
-			config.Auth.Username = split[0]
-			config.set("auth.username")
-			config.Auth.Password = split[1]
-			config.set("auth.password")
+			c.Auth.Username = split[0]
+			c.set("auth.username")
+			c.Auth.Password = split[1]
+			c.set("auth.password")
 		} else {
-			config.Auth.Username = s
-			config.set("auth.username")
+			c.Auth.Username = s
+			c.set("auth.username")
 		}
 		return nil
 	}), "auth", "")
 
 	flags.Var((funcBoolVar)(func(b bool) error {
-		config.SSL.Enabled = b
-		config.set("ssl")
-		config.set("ssl.enabled")
+		c.SSL.Enabled = b
+		c.set("ssl")
+		c.set("ssl.enabled")
 		return nil
 	}), "ssl", "")
 
 	flags.Var((funcBoolVar)(func(b bool) error {
-		config.SSL.Verify = b
-		config.set("ssl")
-		config.set("ssl.verify")
+		c.SSL.Verify = b
+		c.set("ssl")
+		c.set("ssl.verify")
 		return nil
 	}), "ssl-verify", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.SSL.Cert = s
-		config.set("ssl")
-		config.set("ssl.cert")
+		c.SSL.Cert = s
+		c.set("ssl")
+		c.set("ssl.cert")
 		return nil
 	}), "ssl-cert", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.SSL.Key = s
-		config.set("ssl")
-		config.set("ssl.key")
+		c.SSL.Key = s
+		c.set("ssl")
+		c.set("ssl.key")
 		return nil
 	}), "ssl-key", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.SSL.CaCert = s
-		config.set("ssl")
-		config.set("ssl.ca_cert")
+		c.SSL.CaCert = s
+		c.set("ssl")
+		c.set("ssl.ca_cert")
 		return nil
 	}), "ssl-ca-cert", "")
 
+	flags.Var((funcVar)(func(s string) error {
+		c.SSL.CaPath = s
+		c.set("ssl")
+		c.set("ssl.ca_path")
+		return nil
+	}), "ssl-ca-path", "")
+
+	flags.Var((funcVar)(func(s string) error {
+		c.SSL.ServerName = s
+		c.set("ssl")
+		c.set("ssl.server_name")
+		return nil
+	}), "ssl-server-name", "")
+
 	flags.Var((funcDurationVar)(func(d time.Duration) error {
-		config.MaxStale = d
-		config.set("max_stale")
+		c.MaxStale = d
+		c.set("max_stale")
 		return nil
 	}), "max-stale", "")
 
@@ -234,72 +248,72 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 		if err != nil {
 			return err
 		}
-		if config.Prefixes == nil {
-			config.Prefixes = make([]*Prefix, 0, 1)
+		if c.Prefixes == nil {
+			c.Prefixes = make([]*Prefix, 0, 1)
 		}
-		config.Prefixes = append(config.Prefixes, p)
+		c.Prefixes = append(c.Prefixes, p)
 		return nil
 	}), "prefix", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		if config.Excludes == nil {
-			config.Excludes = make([]*Exclude, 0, 1)
+		if c.Excludes == nil {
+			c.Excludes = make([]*Exclude, 0, 1)
 		}
-		config.Excludes = append(config.Excludes, &Exclude{Source: s})
+		c.Excludes = append(c.Excludes, &Exclude{Source: s})
 		return nil
 	}), "exclude", "")
 
 	flags.Var((funcBoolVar)(func(b bool) error {
-		config.Syslog.Enabled = b
-		config.set("syslog")
-		config.set("syslog.enabled")
+		c.Syslog.Enabled = b
+		c.set("syslog")
+		c.set("syslog.enabled")
 		return nil
 	}), "syslog", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.Syslog.Facility = s
-		config.set("syslog.facility")
+		c.Syslog.Facility = s
+		c.set("syslog.facility")
 		return nil
 	}), "syslog-facility", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		w, err := watch.ParseWait(s)
+		w, err := config.ParseWaitConfig(s)
 		if err != nil {
 			return err
 		}
-		config.Wait.Min = w.Min
-		config.Wait.Max = w.Max
-		config.set("wait")
+		c.Wait.Min = w.Min
+		c.Wait.Max = w.Max
+		c.set("wait")
 		return nil
 	}), "wait", "")
 
 	flags.Var((funcDurationVar)(func(d time.Duration) error {
-		config.Retry = d
-		config.set("retry")
+		c.Retry = d
+		c.set("retry")
 		return nil
 	}), "retry", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.Path = s
-		config.set("path")
+		c.Path = s
+		c.set("path")
 		return nil
 	}), "config", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.PidFile = s
-		config.set("pid_file")
+		c.PidFile = s
+		c.set("pid_file")
 		return nil
 	}), "pid-file", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.StatusDir = s
-		config.set("status_dir")
+		c.StatusDir = s
+		c.set("status_dir")
 		return nil
 	}), "status-dir", "")
 
 	flags.Var((funcVar)(func(s string) error {
-		config.LogLevel = s
-		config.set("log_level")
+		c.LogLevel = s
+		c.set("log_level")
 		return nil
 	}), "log-level", "")
 
@@ -319,7 +333,7 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 			args)
 	}
 
-	return config, once, version, nil
+	return c, once, version, nil
 }
 
 // handleError outputs the given error's Error() to the errStream and returns
@@ -330,30 +344,30 @@ func (cli *CLI) handleError(err error, status int) int {
 }
 
 // setup initializes the CLI.
-func (cli *CLI) setup(config *Config) (*Config, error) {
-	if config.Path != "" {
-		newConfig, err := ConfigFromPath(config.Path)
+func (cli *CLI) setup(c *Config) (*Config, error) {
+	if c.Path != "" {
+		newConfig, err := ConfigFromPath(c.Path)
 		if err != nil {
 			return nil, err
 		}
 
 		// Merge ensuring that the CLI options still take precedence
-		newConfig.Merge(config)
-		config = newConfig
+		newConfig.Merge(c)
+		c = newConfig
 	}
 
 	// Setup the logging
 	if err := logging.Setup(&logging.Config{
 		Name:           Name,
-		Level:          config.LogLevel,
-		Syslog:         config.Syslog.Enabled,
-		SyslogFacility: config.Syslog.Facility,
+		Level:          c.LogLevel,
+		Syslog:         c.Syslog.Enabled,
+		SyslogFacility: c.Syslog.Facility,
 		Writer:         cli.errStream,
 	}); err != nil {
 		return nil, err
 	}
 
-	return config, nil
+	return c, nil
 }
 
 const usage = `
@@ -378,6 +392,10 @@ Options:
                            key exchange
   -ssl-ca-cert             Validate server certificate against this CA
                            certificate file list
+  -ssl-ca-path             Sets the path to the CA to use for TLS verification
+  -ssl-server-name         Sets the name of the server to use when validating
+                           TLS.
+
 
   -syslog                  Send the output to syslog instead of standard error
                            and standard out. The syslog facility defaults to
@@ -391,7 +409,7 @@ Options:
                            the destination datacenters - if the destination is
                            omitted, it is assumed to be the same as the source
   -exclude=<src>           Provides a prefix to exclude from replication
-  
+
   -wait=<duration>         Sets the 'minumum(:maximum)' amount of time to wait
                            before replicating
   -retry=<duration>        The amount of time to wait if Consul returns an

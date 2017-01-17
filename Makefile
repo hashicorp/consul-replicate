@@ -150,7 +150,7 @@ docker-push:
 	@docker push "${OWNER}/${NAME}:${VERSION}"
 
 # integration runs the integration tests
-integration: generate
+integration: 
 	@sh -c "'$(CURDIR)/scripts/integration.sh'"
 
 # test runs the test suite

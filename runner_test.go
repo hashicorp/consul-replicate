@@ -10,10 +10,10 @@ func TestNewRunner_initialize(t *testing.T) {
 	once := true
 	config := &Config{
 		Prefixes: []*Prefix{
-			&Prefix{SourceRaw: "1", Destination: "4"},
-			&Prefix{SourceRaw: "2", Destination: "5"},
-			&Prefix{SourceRaw: "3", Destination: "6"},
-			&Prefix{SourceRaw: "4", Destination: "7"},
+			&Prefix{Source: "1", Destination: "4"},
+			&Prefix{Source: "2", Destination: "5"},
+			&Prefix{Source: "3", Destination: "6"},
+			&Prefix{Source: "4", Destination: "7"},
 		},
 		Excludes: []*Exclude{
 			&Exclude{Source: "3"},
@@ -34,8 +34,8 @@ func TestNewRunner_initialize(t *testing.T) {
 		t.Errorf("expected %#v to be %#v", runner.once, once)
 	}
 
-	if runner.client == nil {
-		t.Errorf("expected %#v to not be %#v", runner.client, nil)
+	if runner.clients == nil {
+		t.Errorf("expected %#v to not be %#v", runner.clients, nil)
 	}
 
 	if runner.watcher == nil {

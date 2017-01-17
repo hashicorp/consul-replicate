@@ -1,14 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul-template/watch"
+	"github.com/hashicorp/consul-template/config"
 	"github.com/hashicorp/go-gatedio"
 )
 
@@ -283,8 +282,8 @@ func TestParseFlags_prefixes(t *testing.T) {
 	}
 
 	prefix := config.Prefixes[0]
-	if prefix.Destination != "backup/" {
-		t.Errorf("expected %q to be %q", prefix.Destination, "backup/")
+	if prefix.Destination != "backup" {
+		t.Errorf("expected %q to be %q", prefix.Destination, "backup")
 	}
 }
 
@@ -348,21 +347,21 @@ func TestParseFlags_syslogFacility(t *testing.T) {
 
 func TestParseFlags_wait(t *testing.T) {
 	cli := NewCLI(ioutil.Discard, ioutil.Discard)
-	config, _, _, err := cli.parseFlags([]string{
+	c, _, _, err := cli.parseFlags([]string{
 		"-wait", "10h:11h",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := &watch.Wait{
-		Min: 10 * time.Hour,
-		Max: 11 * time.Hour,
+	expected := &config.WaitConfig{
+		Min: config.TimeDuration(10 * time.Hour),
+		Max: config.TimeDuration(11 * time.Hour),
 	}
-	if !reflect.DeepEqual(config.Wait, expected) {
-		t.Errorf("expected %v to be %v", config.Wait, expected)
+	if !reflect.DeepEqual(c.Wait, expected) {
+		t.Errorf("expected %v to be %v", c.Wait, expected)
 	}
-	if !config.WasSet("wait") {
+	if !c.WasSet("wait") {
 		t.Errorf("expected wait to be set")
 	}
 }
@@ -547,22 +546,6 @@ func TestRun_printsErrors(t *testing.T) {
 	}
 
 	expected := "flag provided but not defined: -bacon"
-	if !strings.Contains(errStream.String(), expected) {
-		t.Errorf("expected %q to eq %q", errStream.String(), expected)
-	}
-}
-
-func TestRun_versionFlag(t *testing.T) {
-	outStream, errStream := gatedio.NewByteBuffer(), gatedio.NewByteBuffer()
-	cli := NewCLI(outStream, errStream)
-	args := strings.Split("consul-replicate -version", " ")
-
-	status := cli.Run(args)
-	if status != ExitCodeOK {
-		t.Errorf("expected %q to eq %q", status, ExitCodeOK)
-	}
-
-	expected := fmt.Sprintf("consul-replicate v%s", Version)
 	if !strings.Contains(errStream.String(), expected) {
 		t.Errorf("expected %q to eq %q", errStream.String(), expected)
 	}

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/consul-template/config"
 	dep "github.com/hashicorp/consul-template/dependency"
-	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl"
 	"github.com/mitchellh/mapstructure"
@@ -59,7 +59,7 @@ type Config struct {
 	Retry time.Duration `mapstructure:"retry"`
 
 	// Wait is the quiescence timers.
-	Wait *watch.Wait `mapstructure:"wait"`
+	Wait *config.WaitConfig `mapstructure:"wait"`
 
 	// LogLevel is the level with which to log for this config.
 	LogLevel string `mapstructure:"log_level"`
@@ -75,201 +75,211 @@ type Config struct {
 // Copy returns a deep copy of the current configuration. This is useful because
 // the nested data structures may be shared.
 func (c *Config) Copy() *Config {
-	config := new(Config)
-	config.Path = c.Path
-	config.Consul = c.Consul
-	config.Token = c.Token
+	o := new(Config)
+	o.Path = c.Path
+	o.Consul = c.Consul
+	o.Token = c.Token
 
 	if c.Auth != nil {
-		config.Auth = &AuthConfig{
+		o.Auth = &AuthConfig{
 			Enabled:  c.Auth.Enabled,
 			Username: c.Auth.Username,
 			Password: c.Auth.Password,
 		}
 	}
 
-	config.PidFile = c.PidFile
+	o.PidFile = c.PidFile
 
 	if c.SSL != nil {
-		config.SSL = &SSLConfig{
-			Enabled: c.SSL.Enabled,
-			Verify:  c.SSL.Verify,
-			Cert:    c.SSL.Cert,
-			Key:     c.SSL.Key,
-			CaCert:  c.SSL.CaCert,
+		o.SSL = &SSLConfig{
+			Enabled:    c.SSL.Enabled,
+			Verify:     c.SSL.Verify,
+			Cert:       c.SSL.Cert,
+			Key:        c.SSL.Key,
+			CaCert:     c.SSL.CaCert,
+			CaPath:     c.SSL.CaPath,
+			ServerName: c.SSL.ServerName,
 		}
 	}
 
 	if c.Syslog != nil {
-		config.Syslog = &SyslogConfig{
+		o.Syslog = &SyslogConfig{
 			Enabled:  c.Syslog.Enabled,
 			Facility: c.Syslog.Facility,
 		}
 	}
 
-	config.MaxStale = c.MaxStale
+	o.MaxStale = c.MaxStale
 
-	config.Prefixes = make([]*Prefix, len(c.Prefixes))
+	o.Prefixes = make([]*Prefix, len(c.Prefixes))
 	for i, p := range c.Prefixes {
-		config.Prefixes[i] = &Prefix{
+		o.Prefixes[i] = &Prefix{
+			Dependency:  p.Dependency,
 			Source:      p.Source,
-			SourceRaw:   p.SourceRaw,
 			Destination: p.Destination,
 		}
 	}
 
-	config.Excludes = make([]*Exclude, len(c.Excludes))
+	o.Excludes = make([]*Exclude, len(c.Excludes))
 	for i, p := range c.Excludes {
-		config.Excludes[i] = &Exclude{
+		o.Excludes[i] = &Exclude{
 			Source: p.Source,
 		}
 	}
 
-	config.Retry = c.Retry
+	o.Retry = c.Retry
 
 	if c.Wait != nil {
-		config.Wait = &watch.Wait{
+		o.Wait = &config.WaitConfig{
 			Min: c.Wait.Min,
 			Max: c.Wait.Max,
 		}
 	}
 
-	config.LogLevel = c.LogLevel
-	config.StatusDir = c.StatusDir
+	o.LogLevel = c.LogLevel
+	o.StatusDir = c.StatusDir
 
-	config.setKeys = c.setKeys
+	o.setKeys = c.setKeys
 
-	return config
+	return o
 }
 
 // Merge merges the values in config into this config object. Values in the
 // config object overwrite the values in c.
-func (c *Config) Merge(config *Config) {
-	if config.WasSet("path") {
-		c.Path = config.Path
+func (c *Config) Merge(o *Config) {
+	if o.WasSet("path") {
+		c.Path = o.Path
 	}
 
-	if config.WasSet("consul") {
-		c.Consul = config.Consul
+	if o.WasSet("consul") {
+		c.Consul = o.Consul
 	}
 
-	if config.WasSet("token") {
-		c.Token = config.Token
+	if o.WasSet("token") {
+		c.Token = o.Token
 	}
 
-	if config.WasSet("auth") {
+	if o.WasSet("auth") {
 		if c.Auth == nil {
 			c.Auth = &AuthConfig{}
 		}
-		if config.WasSet("auth.username") {
-			c.Auth.Username = config.Auth.Username
+		if o.WasSet("auth.username") {
+			c.Auth.Username = o.Auth.Username
 			c.Auth.Enabled = true
 		}
-		if config.WasSet("auth.password") {
-			c.Auth.Password = config.Auth.Password
+		if o.WasSet("auth.password") {
+			c.Auth.Password = o.Auth.Password
 			c.Auth.Enabled = true
 		}
-		if config.WasSet("auth.enabled") {
-			c.Auth.Enabled = config.Auth.Enabled
+		if o.WasSet("auth.enabled") {
+			c.Auth.Enabled = o.Auth.Enabled
 		}
 	}
 
-	if config.WasSet("pid_file") {
-		c.PidFile = config.PidFile
+	if o.WasSet("pid_file") {
+		c.PidFile = o.PidFile
 	}
 
-	if config.WasSet("ssl") {
+	if o.WasSet("ssl") {
 		if c.SSL == nil {
 			c.SSL = &SSLConfig{}
 		}
-		if config.WasSet("ssl.verify") {
-			c.SSL.Verify = config.SSL.Verify
+		if o.WasSet("ssl.verify") {
+			c.SSL.Verify = o.SSL.Verify
 			c.SSL.Enabled = true
 		}
-		if config.WasSet("ssl.cert") {
-			c.SSL.Cert = config.SSL.Cert
+		if o.WasSet("ssl.cert") {
+			c.SSL.Cert = o.SSL.Cert
 			c.SSL.Enabled = true
 		}
-		if config.WasSet("ssl.key") {
-			c.SSL.Key = config.SSL.Key
+		if o.WasSet("ssl.key") {
+			c.SSL.Key = o.SSL.Key
 			c.SSL.Enabled = true
 		}
-		if config.WasSet("ssl.ca_cert") {
-			c.SSL.CaCert = config.SSL.CaCert
+		if o.WasSet("ssl.ca_cert") {
+			c.SSL.CaCert = o.SSL.CaCert
 			c.SSL.Enabled = true
 		}
-		if config.WasSet("ssl.enabled") {
-			c.SSL.Enabled = config.SSL.Enabled
+		if o.WasSet("ssl.ca_path") {
+			c.SSL.CaPath = o.SSL.CaPath
+			c.SSL.Enabled = true
+		}
+		if o.WasSet("ssl.server_name") {
+			c.SSL.ServerName = o.SSL.ServerName
+			c.SSL.Enabled = true
+		}
+		if o.WasSet("ssl.enabled") {
+			c.SSL.Enabled = o.SSL.Enabled
 		}
 	}
 
-	if config.WasSet("syslog") {
+	if o.WasSet("syslog") {
 		if c.Syslog == nil {
 			c.Syslog = &SyslogConfig{}
 		}
-		if config.WasSet("syslog.facility") {
-			c.Syslog.Facility = config.Syslog.Facility
+		if o.WasSet("syslog.facility") {
+			c.Syslog.Facility = o.Syslog.Facility
 			c.Syslog.Enabled = true
 		}
-		if config.WasSet("syslog.enabled") {
-			c.Syslog.Enabled = config.Syslog.Enabled
+		if o.WasSet("syslog.enabled") {
+			c.Syslog.Enabled = o.Syslog.Enabled
 		}
 	}
 
-	if config.WasSet("max_stale") {
-		c.MaxStale = config.MaxStale
+	if o.WasSet("max_stale") {
+		c.MaxStale = o.MaxStale
 	}
 
-	if config.Prefixes != nil {
+	if o.Prefixes != nil {
 		if c.Prefixes == nil {
 			c.Prefixes = make([]*Prefix, 0)
 		}
 
-		for _, prefix := range config.Prefixes {
+		for _, prefix := range o.Prefixes {
 			c.Prefixes = append(c.Prefixes, &Prefix{
+				Dependency:  prefix.Dependency,
 				Source:      prefix.Source,
-				SourceRaw:   prefix.SourceRaw,
 				Destination: prefix.Destination,
 			})
 		}
 	}
 
-	if config.Excludes != nil {
+	if o.Excludes != nil {
 		if c.Excludes == nil {
 			c.Excludes = []*Exclude{}
 		}
 
-		for _, exclude := range config.Excludes {
+		for _, exclude := range o.Excludes {
 			c.Excludes = append(c.Excludes, &Exclude{
 				Source: exclude.Source,
 			})
 		}
 	}
 
-	if config.WasSet("retry") {
-		c.Retry = config.Retry
+	if o.WasSet("retry") {
+		c.Retry = o.Retry
 	}
 
-	if config.WasSet("wait") {
-		c.Wait = &watch.Wait{
-			Min: config.Wait.Min,
-			Max: config.Wait.Max,
+	if o.WasSet("wait") {
+		c.Wait = &config.WaitConfig{
+			Min: o.Wait.Min,
+			Max: o.Wait.Max,
 		}
 	}
 
-	if config.WasSet("log_level") {
-		c.LogLevel = config.LogLevel
+	if o.WasSet("log_level") {
+		c.LogLevel = o.LogLevel
 	}
 
-	if config.WasSet("status_dir") {
-		c.StatusDir = config.StatusDir
+	if o.WasSet("status_dir") {
+		c.StatusDir = o.StatusDir
 	}
 
 	if c.setKeys == nil {
 		c.setKeys = make(map[string]struct{})
 	}
 
-	for k := range config.setKeys {
+	for k := range o.setKeys {
 		if _, ok := c.setKeys[k]; !ok {
 			c.setKeys[k] = struct{}{}
 		}
@@ -317,19 +327,19 @@ func ParseConfig(path string) (*Config, error) {
 	flattenKeys(parsed, []string{"auth", "ssl", "syslog"})
 
 	// Create a new, empty config
-	config := new(Config)
+	c := new(Config)
 
 	// Use mapstructure to populate the basic config fields
 	metadata := new(mapstructure.Metadata)
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			watch.StringToWaitDurationHookFunc(),
+			config.StringToWaitDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
 			mapstructure.StringToTimeDurationHookFunc(),
 		),
 		ErrorUnused: true,
 		Metadata:    metadata,
-		Result:      config,
+		Result:      c,
 	})
 	if err != nil {
 		errs = multierror.Append(errs, err)
@@ -341,39 +351,39 @@ func ParseConfig(path string) (*Config, error) {
 	}
 
 	// Store a reference to the path where this config was read from
-	config.Path = path
+	c.Path = path
 
 	// Parse the prefix sources
-	for _, prefix := range config.Prefixes {
-		parsed, err := dep.ParseStoreKeyPrefix(prefix.SourceRaw)
+	for _, prefix := range c.Prefixes {
+		parsed, err := dep.NewKVListQuery(prefix.Source)
 		if err != nil {
 			errs = multierror.Append(errs, err)
 			continue
 		}
-		prefix.Source = parsed
+		prefix.Dependency = parsed
 
 		// If no destination was given, default to the prefix
 		if prefix.Destination == "" {
-			prefix.Destination = parsed.Prefix
+			prefix.Destination = prefix.Source
 		}
 	}
 
 	// Update the list of set keys
-	if config.setKeys == nil {
-		config.setKeys = make(map[string]struct{})
+	if c.setKeys == nil {
+		c.setKeys = make(map[string]struct{})
 	}
 	for _, key := range metadata.Keys {
-		if _, ok := config.setKeys[key]; !ok {
-			config.setKeys[key] = struct{}{}
+		if _, ok := c.setKeys[key]; !ok {
+			c.setKeys[key] = struct{}{}
 		}
 	}
-	config.setKeys["path"] = struct{}{}
+	c.setKeys["path"] = struct{}{}
 
 	d := DefaultConfig()
-	d.Merge(config)
-	config = d
+	d.Merge(c)
+	c = d
 
-	return config, errs.ErrorOrNil()
+	return c, errs.ErrorOrNil()
 }
 
 // DefaultConfig returns the default configuration struct.
@@ -400,9 +410,9 @@ func DefaultConfig() *Config {
 		Excludes:  []*Exclude{},
 		Retry:     5 * time.Second,
 		StatusDir: "service/consul-replicate/statuses",
-		Wait: &watch.Wait{
-			Min: 150 * time.Millisecond,
-			Max: 400 * time.Millisecond,
+		Wait: &config.WaitConfig{
+			Min: config.TimeDuration(150 * time.Millisecond),
+			Max: config.TimeDuration(400 * time.Millisecond),
 		},
 		setKeys: make(map[string]struct{}),
 	}
@@ -476,11 +486,13 @@ type AuthConfig struct {
 
 // SSLConfig is the configuration for SSL.
 type SSLConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Verify  bool   `mapstructure:"verify"`
-	Cert    string `mapstructure:"cert"`
-	Key     string `mapstructure:"key"`
-	CaCert  string `mapstructure:"ca_cert"`
+	Enabled    bool   `mapstructure:"enabled"`
+	Verify     bool   `mapstructure:"verify"`
+	Cert       string `mapstructure:"cert"`
+	Key        string `mapstructure:"key"`
+	CaCert     string `mapstructure:"ca_cert"`
+	CaPath     string `mapstructure:"ca_path"`
+	ServerName string `mapstructure:"server_name"`
 }
 
 // SyslogConfig is the configuration for syslog.
@@ -489,14 +501,12 @@ type SyslogConfig struct {
 	Facility string `mapstructure:"facility"`
 }
 
-// The pattern to split the prefix syntax on
-var prefixRe = regexp.MustCompile("([a-zA-Z]:)?([^:]+)")
-
 // Prefix is the representation of a key prefix.
 type Prefix struct {
-	Source      *dep.StoreKeyPrefix `mapstructure:"-"`
-	SourceRaw   string              `mapstructure:"source"`
-	Destination string              `mapstructure:"destination"`
+	Dependency  *dep.KVListQuery `mapstructure:"-"`
+	Source      string           `mapstructure:"source"`
+	DataCenter  string           `mapstructure:"datacenter"`
+	Destination string           `mapstructure:"destination"`
 }
 
 // Exclude is a key path prefix to exclude from replication
@@ -511,34 +521,60 @@ func ParsePrefix(s string) (*Prefix, error) {
 		return nil, fmt.Errorf("cannot specify empty prefix declaration")
 	}
 
-	var sourceRaw, destination string
-	parts := prefixRe.FindAllString(s, -1)
+	parts := strings.SplitN(s, ":", 2)
 
+	var source, destination string
 	switch len(parts) {
 	case 1:
-		sourceRaw = parts[0]
+		source, destination = parts[0], ""
 	case 2:
-		sourceRaw, destination = parts[0], parts[1]
+		source, destination = parts[0], parts[1]
 	default:
-		return nil, fmt.Errorf("invalid prefix declaration format")
+		return nil, fmt.Errorf("invalid format: %q", s)
 	}
 
-	source, err := dep.ParseStoreKeyPrefix(sourceRaw)
+	if source != "" && !dep.KVListQueryRe.MatchString(source) {
+		return nil, fmt.Errorf("invalid format: %q", s)
+	}
+	m := regexpMatch(dep.KVListQueryRe, source)
+	prefix := m["prefix"]
+	dc := m["dc"]
+
+	d, err := dep.NewKVListQuery(prefix)
 	if err != nil {
 		return nil, err
 	}
 
 	if destination == "" {
-		destination = source.Prefix
+		destination = prefix
 	}
-	// ensure destination prefix ends with "/"
-	destination = strings.TrimSuffix(destination, "/") + "/"
 
 	return &Prefix{
-		Source:      source,
-		SourceRaw:   sourceRaw,
+		Dependency:  d,
+		Source:      prefix,
+		DataCenter:  dc,
 		Destination: destination,
 	}, nil
+}
+
+// regexpMatch matches the given regexp and extracts the match groups into a
+// named map.
+func regexpMatch(re *regexp.Regexp, q string) map[string]string {
+	names := re.SubexpNames()
+	match := re.FindAllStringSubmatch(q, -1)
+
+	if len(match) == 0 {
+		return map[string]string{}
+	}
+
+	m := map[string]string{}
+	for i, n := range match[0] {
+		if names[i] != "" {
+			m[names[i]] = n
+		}
+	}
+
+	return m
 }
 
 // flattenKeys is a function that takes a map[string]interface{} and recursively
