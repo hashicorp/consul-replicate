@@ -117,6 +117,7 @@ func (c *Config) Copy() *Config {
 			Dependency:  p.Dependency,
 			Source:      p.Source,
 			Destination: p.Destination,
+			DataCenter:  p.DataCenter,
 		}
 	}
 
@@ -240,6 +241,7 @@ func (c *Config) Merge(o *Config) {
 				Dependency:  prefix.Dependency,
 				Source:      prefix.Source,
 				Destination: prefix.Destination,
+				DataCenter:  prefix.DataCenter,
 			})
 		}
 	}
