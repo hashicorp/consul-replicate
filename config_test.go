@@ -148,18 +148,33 @@ func TestMerge_Prefixes(t *testing.T) {
 	config1 := testConfig(`
 		prefix {
 			source = "foo"
+			datacenter = "dc"
 			destination = "bar"
 		}
 	`, t)
 	config2 := testConfig(`
 		prefix {
 			source = "foo-2"
+			datacenter = "dc"
 			destination = "bar-2"
 		}
 	`, t)
 	config1.Merge(config2)
+	// Test datacenter auto expanding and source to prefix reduce
+	config1.Merge(testConfig(`
+		prefix {
+			source = "foo@dc"
+		}
+	`, t))
+	// Test both equal allowed
+	config1.Merge(testConfig(`
+		prefix {
+			source = "foo@dc"
+			datacenter = "dc"
+		}
+	`, t))
 
-	if len(config1.Prefixes) != 2 {
+	if len(config1.Prefixes) != 4 {
 		t.Fatalf("bad prefixes %d", len(config1.Prefixes))
 	}
 
@@ -168,6 +183,9 @@ func TestMerge_Prefixes(t *testing.T) {
 	}
 	if config1.Prefixes[0].Source != "foo" {
 		t.Errorf("bad source_raw: %s", config1.Prefixes[0].Source)
+	}
+	if config1.Prefixes[0].DataCenter != "dc" {
+		t.Errorf("bad datacenter: %s", config1.Prefixes[0].DataCenter)
 	}
 	if config1.Prefixes[0].Destination != "bar" {
 		t.Errorf("bad destination: %s", config1.Prefixes[0].Destination)
@@ -179,8 +197,37 @@ func TestMerge_Prefixes(t *testing.T) {
 	if config1.Prefixes[1].Source != "foo-2" {
 		t.Errorf("bad source_raw: %s", config1.Prefixes[1].Source)
 	}
+	if config1.Prefixes[1].DataCenter != "dc" {
+		t.Errorf("bad datacenter: %s", config1.Prefixes[1].DataCenter)
+	}
 	if config1.Prefixes[1].Destination != "bar-2" {
 		t.Errorf("bad destination: %s", config1.Prefixes[1].Destination)
+	}
+
+	if config1.Prefixes[2].Dependency == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[2].Dependency)
+	}
+	if config1.Prefixes[2].Source != "foo" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[2].Source)
+	}
+	if config1.Prefixes[2].DataCenter != "dc" {
+		t.Errorf("bad datacenter: %s", config1.Prefixes[2].DataCenter)
+	}
+	if config1.Prefixes[2].Destination != "foo" {
+		t.Errorf("bad destination: %s", config1.Prefixes[2].Destination)
+	}
+
+	if config1.Prefixes[3].Dependency == nil {
+		t.Errorf("bad source: %#v", config1.Prefixes[3].Dependency)
+	}
+	if config1.Prefixes[3].Source != "foo" {
+		t.Errorf("bad source_raw: %s", config1.Prefixes[3].Source)
+	}
+	if config1.Prefixes[3].DataCenter != "dc" {
+		t.Errorf("bad datacenter: %s", config1.Prefixes[3].DataCenter)
+	}
+	if config1.Prefixes[3].Destination != "foo" {
+		t.Errorf("bad destination: %s", config1.Prefixes[3].Destination)
 	}
 }
 
@@ -352,6 +399,11 @@ func TestParsePrefix_stringWithSpacesArgs(t *testing.T) {
 
 func TestParsePrefix_source(t *testing.T) {
 	prefix, err := ParsePrefix("global")
+	if err != nil && err.Error() != "kv.list: source datacenter required" {
+		t.Fatal(err)
+	}
+
+	prefix, err = ParsePrefix("global@dc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,6 +421,11 @@ func TestParsePrefix_source(t *testing.T) {
 
 func TestParsePrefix_sourceSlash(t *testing.T) {
 	prefix, err := ParsePrefix("/global")
+	if err != nil && err.Error() != "kv.list: source datacenter required" {
+		t.Fatal(err)
+	}
+
+	prefix, err = ParsePrefix("/global@dc")
 	if err != nil {
 		t.Fatal(err)
 	}

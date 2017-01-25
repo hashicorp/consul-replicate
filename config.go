@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -356,17 +357,32 @@ func ParseConfig(path string) (*Config, error) {
 	c.Path = path
 
 	// Parse the prefix sources
-	for _, prefix := range c.Prefixes {
-		parsed, err := dep.NewKVListQuery(prefix.Source)
+	for _, cp := range c.Prefixes {
+		dc, prefix, err := dep.ParseSource(cp.Source)
 		if err != nil {
 			errs = multierror.Append(errs, err)
 			continue
 		}
-		prefix.Dependency = parsed
+
+		if dc != "" && cp.DataCenter != "" && dc != cp.DataCenter {
+			errs = multierror.Append(errs, fmt.Errorf("conflicting datacenter req: %s / %s",
+				cp.Source, cp.DataCenter))
+			continue
+		}
+
+		if dc != "" {
+			cp.Source = prefix
+			cp.DataCenter = dc
+		}
+
+		if cp.Dependency, err = dep.NewKVListQuery(cp.DataCenter, cp.Source); err != nil {
+			errs = multierror.Append(errs, err)
+			continue
+		}
 
 		// If no destination was given, default to the prefix
-		if prefix.Destination == "" {
-			prefix.Destination = prefix.Source
+		if cp.Destination == "" {
+			cp.Destination = cp.Source
 		}
 	}
 
@@ -520,7 +536,7 @@ type Exclude struct {
 // Prefix component.
 func ParsePrefix(s string) (*Prefix, error) {
 	if len(strings.TrimSpace(s)) < 1 {
-		return nil, fmt.Errorf("cannot specify empty prefix declaration")
+		return nil, errors.New("cannot specify empty prefix declaration")
 	}
 
 	parts := strings.SplitN(s, ":", 2)
@@ -535,14 +551,12 @@ func ParsePrefix(s string) (*Prefix, error) {
 		return nil, fmt.Errorf("invalid format: %q", s)
 	}
 
-	if source == "" || !dep.KVListQueryRe.MatchString(source) {
-		return nil, fmt.Errorf("invalid format: %q", s)
+	dc, prefix, err := dep.ParseSource(source)
+	if err != nil {
+		return nil, err
 	}
-	m := regexpMatch(dep.KVListQueryRe, source)
-	prefix := m["prefix"]
-	dc := m["dc"]
 
-	d, err := dep.NewKVListQuery(source)
+	d, err := dep.NewKVListQuery(dc, prefix)
 	if err != nil {
 		return nil, err
 	}
