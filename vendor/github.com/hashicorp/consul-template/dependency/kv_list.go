@@ -41,17 +41,26 @@ type KVListQuery struct {
 }
 
 // NewKVListQuery parses a string into a dependency.
-func NewKVListQuery(s string) (*KVListQuery, error) {
+func NewKVListQuery(dc string, prefix string) (*KVListQuery, error) {
+	if dc == "" {
+		return nil, errors.New("kv.list: source datacenter required")
+	}
+
+	return &KVListQuery{
+		dc: dc,
+		prefix: prefix,
+		stopCh: make(chan struct{}, 1),
+	}, nil
+}
+
+func ParseSource(s string) (string, string, error) {
 	if s != "" && !KVListQueryRe.MatchString(s) {
-		return nil, fmt.Errorf("kv.list: invalid format: %q", s)
+		return "", "", fmt.Errorf("kv.list: invalid format: %q", s)
 	}
 
 	m := regexpMatch(KVListQueryRe, s)
-	return &KVListQuery{
-		dc:     m["dc"],
-		prefix: m["prefix"],
-		stopCh: make(chan struct{}, 1),
-	}, nil
+
+	return m["dc"], m["prefix"], nil
 }
 
 // Fetch queries the Consul API defined by the given client.
