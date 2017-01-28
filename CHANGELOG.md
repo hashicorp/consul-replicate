@@ -1,9 +1,12 @@
 Consul Replicate Changelog
 ==========================
 
-## v0.3.1.dev (Unreleased)
+## v0.3.1.dev (January 28, 2017)
 
 BUG FIXES:
+
+  - Pass along the datacenter in parsed queries [GH-66]
+  - Fix config file prefix parsing of the datacenter [GH-70]
 
 ## v0.3.0 (January 17, 2017)
 
