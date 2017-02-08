@@ -305,7 +305,7 @@ func (c *Config) set(key string) {
 	}
 }
 
-// g reads the configuration file at the given path and returns a new
+// ParseConfig reads the configuration file at the given path and returns a new
 // Config struct with the data populated.
 func ParseConfig(path string) (*Config, error) {
 	var errs *multierror.Error
