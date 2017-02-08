@@ -1,9 +1,7 @@
 Consul Replicate
 ================
-[![Latest Version](http://img.shields.io/github/release/hashicorp/consul-replicate.svg?style=flat-square)][release]
 [![Build Status](http://img.shields.io/travis/hashicorp/consul-replicate.svg?style=flat-square)][travis]
 
-[release]: https://github.com/hashicorp/consul-replicate/releases
 [travis]: https://travis-ci.org/hashicorp/consul-replicate
 
 This project provides a convenient way to replicate K/V pairs across multiple [Consul][] data centers using the `consul-replicate` daemon.
@@ -204,7 +202,7 @@ A: No, a proper leader will never be elected.
 
 Contributing
 ------------
-To hack on Consul Replicate, you will need a modern [Go][] environment. To compile the `consul-replicate` binary and run the test suite, simply execute:
+To hack on Consul Replicate, you will need a modern [Go][] environment of version 1.7 or higher. To compile the `consul-replicate` binary and run the test suite, simply execute:
 
 ```shell
 $ make
