@@ -21,7 +21,7 @@ $ cd consul-replicate
 $ make
 ```
 
-This process will create `bin/consul-replicate` which make be invoked as a binary.
+This process will create `bin/consul-replicate` which may be invoked as a binary.
 
 
 Usage
