@@ -6,7 +6,7 @@ Consul Replicate
 
 This project provides a convenient way to replicate K/V pairs across multiple [Consul][] data centers using the `consul-replicate` daemon.
 
-The daemon `consul-replicate` integrates with [Consul][] to perform cross- K/V replication. This makes it possible to manage application configuration from a central , with low-latency asynchronous replication to other data centers, thus avoiding the need for smart clients which would need to write to all data centers and queue writes to handle network failures.
+The daemon `consul-replicate` integrates with [Consul][] to perform cross-data-center K/V replication. This makes it possible to manage application configuration from a central data center, with low-latency asynchronous replication to other data centers, thus avoiding the need for smart clients that would need to write to all data centers and queue writes to handle network failures.
 
 **The documentation in this README corresponds to the master branch of Consul Replicate. It may contain unreleased features or different APIs than the most recently released version. Please see the Git tag that corresponds to your version of Consul Replicate for the proper documentation.**
 
@@ -37,7 +37,7 @@ Usage
 | `syslog`          | Send log output to syslog (in addition to stdout and stderr). The default value is false.
 | `syslog-facility` | The facility to use when sending to syslog. This requires the use of `-syslog`. The default value is `LOCAL0`.
 | `token`           | The [Consul API token][Consul ACLs]. There is no default value.
-| `prefix`*         | The source prefix including the , with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
+| `prefix`*         | The source prefix including the data center, with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
 | `exclude`         | A prefix to exclude during replication. This option is additive and may be specified multiple times for multiple prefixes to exclude.
 | `wait`            | The `minimum(:maximum)` to wait for stability before replicating, separated by a colon (`:`). If the optional maximum value is omitted, it is assumed to be 4x the required minimum value. There is no default value.
 | `retry`           | The amount of time to wait if Consul returns an error when communicating with the API. The default value is 5 seconds.
@@ -57,7 +57,7 @@ Additionally, the following options are available for advanced users. It is not 
 ### Command Line
 The CLI interface supports all of the options detailed above.
 
-Replicate all keys under "global" from the nyc1 :
+Replicate all keys under "global" from the nyc1 data center:
 
 ```shell
 $ consul-replicate \
@@ -71,7 +71,7 @@ $ consul-replicate \
   -prefix "global@nyc1:default"
 ```
 
-Replicate all keys under "global" from the nyc1 , but do not poll or watch for changes (just do it one time):
+Replicate all keys under "global" from the nyc1 data center, but do not poll or watch for changes (just do it one time):
 
 ```shell
 $ consul-replicate \
@@ -79,7 +79,7 @@ $ consul-replicate \
   -once
 ```
 
-Replicate all keys under "global" from the nyc1 , but exclude the global/private prefix:
+Replicate all keys under "global" from the nyc1 data center, but exclude the global/private prefix:
 
 ```shell
 $ consul-replicate \
@@ -141,7 +141,7 @@ If a directory is given instead of a file, all files in the directory (recursive
 
 Leader Election
 ---------------
-Early versions of [Consul Replicate][] allowed multiple instances to run per  for redundancy and high-availability. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully fail over. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
+Early versions of [Consul Replicate][] allowed multiple instances to run per data center for redundancy and high-availability. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully fail over. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
 
 ```shell
 consul lock locks/replicate consul-replicate -prefix ...
