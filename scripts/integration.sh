@@ -99,6 +99,7 @@ curl -sLo /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/six -d "six"
 sleep 3
 curl -sL $ADDRESS_DC2/v1/kv/backup/six | grep -q "c2l4"
 
+echo "##Test Case #1"
 echo "    Writing a key in DC2"
 curl -sLo /dev/null -X PUT $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete -d "don't delete"
 sleep 3
@@ -109,6 +110,18 @@ sleep 3
 
 echo "    Checking key still exists in DC2"
 curl -sL $ADDRESS_DC2/v1/kv/backup/$EXCLUDED_KEY/nodelete | grep -q "ZG9uJ3QgZGVsZXRl"
+
+echo "##Test Case #2"
+echo "    Writing a key in DC2"
+curl -sLo /dev/null -X PUT $ADDRESS_DC2/v1/kv/backup/excluded_key -d "don't delete"
+sleep 3
+
+echo "    Updating prefix in DC1"
+curl -sLo /dev/null -X PUT $ADDRESS_DC1/v1/kv/global/parent_folder/other_folder/anykey -d "test data"
+sleep 3
+
+echo "    Checking key still exists in DC2"
+curl -sL $ADDRESS_DC2/v1/kv/backup/excluded_key | grep -q "ZG9uJ3QgZGVsZXRl"
 
 rm -rf $DATADIR_DC1
 rm -rf $DATADIR_DC2
