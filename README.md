@@ -39,7 +39,7 @@ Usage
 | `token`           | The [Consul API token][Consul ACLs]. There is no default value.
 | `prefix`*         | The source prefix including the data center, with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
 | `exclude`         | A prefix to exclude during replication. This option is additive and may be specified multiple times for multiple prefixes to exclude.
-| `excludematch`    | A substring that causes a key to be exclude when it matches the source during replication. This option is additive and may be specified multiple times for multiple prefixes to exclude.
+| `excludematch`    | A substring that causes a key to be exclude when it matches the source during replication. This option is additive and may be specified multiple times for multiple substrings to exclude.
 | `wait`            | The `minimum(:maximum)` to wait for stability before replicating, separated by a colon (`:`). If the optional maximum value is omitted, it is assumed to be 4x the required minimum value. There is no default value.
 | `retry`           | The amount of time to wait if Consul returns an error when communicating with the API. The default value is 5 seconds.
 | `config`          | The path to a configuration file or directory of configuration files on disk, relative to the current working directory. Values specified on the CLI take precedence over values specified in the configuration file. There is no default value.
