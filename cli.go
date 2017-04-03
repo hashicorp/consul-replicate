@@ -263,6 +263,14 @@ func (cli *CLI) parseFlags(args []string) (*Config, bool, bool, error) {
 		return nil
 	}), "exclude", "")
 
+  flags.Var((funcVar)(func(s string) error {
+		if c.ExcludeMatches == nil {
+			c.ExcludeMatches = make([]*ExcludeMatch, 0, 1)
+		}
+		c.ExcludeMatches = append(c.ExcludeMatches, &ExcludeMatch{Source: s})
+		return nil
+	}), "excludematch", "")
+
 	flags.Var((funcBoolVar)(func(b bool) error {
 		c.Syslog.Enabled = b
 		c.set("syslog")
@@ -409,6 +417,8 @@ Options:
                            the destination datacenters - if the destination is
                            omitted, it is assumed to be the same as the source
   -exclude=<src>           Provides a prefix to exclude from replication
+
+  -excludematch=<src>      Provides a path match to exclude from replication
 
   -wait=<duration>         Sets the 'minumum(:maximum)' amount of time to wait
                            before replicating

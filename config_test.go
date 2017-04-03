@@ -257,6 +257,32 @@ func TestMerge_Excludes(t *testing.T) {
 	}
 }
 
+func TestMerge_ExcludeMatches(t *testing.T) {
+	config1 := testConfig(`
+		excludematch {
+			source = "foo"
+		}
+	`, t)
+	config2 := testConfig(`
+		excludematch {
+			source = "foo-2"
+		}
+	`, t)
+	config1.Merge(config2)
+
+	if len(config1.ExcludeMatches) != 2 {
+		t.Fatalf("bad exclude matches %d", len(config1.ExcludeMatches))
+	}
+
+	if config1.ExcludeMatches[0].Source != "foo" {
+		t.Errorf("bad source: %#v", config1.ExcludeMatches[0].Source)
+	}
+
+	if config1.ExcludeMatches[1].Source != "foo-2" {
+		t.Errorf("bad source: %#v", config1.ExcludeMatches[1].Source)
+	}
+}
+
 func TestMerge_wait(t *testing.T) {
 	config1 := testConfig(`
 		wait = "1s:1s"
@@ -331,6 +357,7 @@ func TestParseConfig_correctValues(t *testing.T) {
 		},
 		Prefixes: []*Prefix{},
 		Excludes: []*Exclude{},
+		ExcludeMatches: []*ExcludeMatch{},
 		SSL: &SSLConfig{
 			Enabled: true,
 			Verify:  false,

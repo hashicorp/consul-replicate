@@ -37,6 +37,9 @@ type Config struct {
 	// Excludes is the list of key prefixes to exclude from replication.
 	Excludes []*Exclude `mapstructure:"exclude"`
 
+  // ExcludeMatches is the list of key match expressions to exclude from replication.
+	ExcludeMatches []*ExcludeMatch `mapstructure:"excludematch"`
+
 	// Auth is the HTTP basic authentication for communicating with Consul.
 	Auth *AuthConfig `mapstructure:"auth"`
 
@@ -125,6 +128,13 @@ func (c *Config) Copy() *Config {
 	o.Excludes = make([]*Exclude, len(c.Excludes))
 	for i, p := range c.Excludes {
 		o.Excludes[i] = &Exclude{
+			Source: p.Source,
+		}
+	}
+
+	o.ExcludeMatches = make([]*ExcludeMatch, len(c.ExcludeMatches))
+	for i, p := range c.ExcludeMatches {
+		o.ExcludeMatches[i] = &ExcludeMatch{
 			Source: p.Source,
 		}
 	}
@@ -255,6 +265,18 @@ func (c *Config) Merge(o *Config) {
 		for _, exclude := range o.Excludes {
 			c.Excludes = append(c.Excludes, &Exclude{
 				Source: exclude.Source,
+			})
+		}
+	}
+
+	if o.ExcludeMatches != nil {
+		if c.ExcludeMatches == nil {
+			c.ExcludeMatches = []*ExcludeMatch{}
+		}
+
+		for _, excludematch := range o.ExcludeMatches {
+			c.ExcludeMatches = append(c.ExcludeMatches, &ExcludeMatch{
+				Source: excludematch.Source,
 			})
 		}
 	}
@@ -426,6 +448,7 @@ func DefaultConfig() *Config {
 		LogLevel:  logLevel,
 		Prefixes:  []*Prefix{},
 		Excludes:  []*Exclude{},
+		ExcludeMatches:  []*ExcludeMatch{},
 		Retry:     5 * time.Second,
 		StatusDir: "service/consul-replicate/statuses",
 		Wait: &config.WaitConfig{
@@ -529,6 +552,11 @@ type Prefix struct {
 
 // Exclude is a key path prefix to exclude from replication
 type Exclude struct {
+	Source string `mapstructure:"source"`
+}
+
+// Exclude is a key path match to exclude from replication
+type ExcludeMatch struct {
 	Source string `mapstructure:"source"`
 }
 
