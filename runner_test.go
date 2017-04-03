@@ -18,6 +18,9 @@ func TestNewRunner_initialize(t *testing.T) {
 		Excludes: []*Exclude{
 			&Exclude{Source: "3"},
 		},
+		ExcludeMatches: []*ExcludeMatch{
+			&ExcludeMatch{Source: "2"},
+		},
 	}
 
 	runner, err := NewRunner(config, once)

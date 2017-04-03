@@ -90,6 +90,7 @@ $CONSUL_REPLICATE_BIN \
   -consul $ADDRESS_DC2 \
   -prefix "global@dc1:backup" \
   -exclude "global/$EXCLUDED_KEY" \
+  -excludematch "excluded_" \
   -log-level $LOG_LEVEL &
 CONSUL_REPLICATE_PID=$!
 sleep 3

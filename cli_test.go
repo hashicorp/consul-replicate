@@ -306,6 +306,25 @@ func TestParseFlags_excludes(t *testing.T) {
 	}
 }
 
+func TestParseFlags_excludematches(t *testing.T) {
+	cli := NewCLI(ioutil.Discard, ioutil.Discard)
+	config, _, _, err := cli.parseFlags([]string{
+		"-excludematch", "excludematched/",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(config.ExcludeMatches) != 1 {
+		t.Fatal("expected 1 exclude match")
+	}
+
+	excludematch := config.ExcludeMatches[0]
+	if excludematch.Source != "excludematched/" {
+		t.Errorf("expected %q to be %q", excludematch.Source, "excludematched/")
+	}
+}
+
 func TestParseFlags_syslog(t *testing.T) {
 	cli := NewCLI(ioutil.Discard, ioutil.Discard)
 	config, _, _, err := cli.parseFlags([]string{
