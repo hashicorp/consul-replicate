@@ -1,0 +1,7 @@
+---
+init_config:
+instances:
+- master_dc_path: path/to/master_dc_value/in_kv_store
+  check_paths:
+  - replicate_prefix/sample_frequently_changing_value
+  - another_prefix/another_value
