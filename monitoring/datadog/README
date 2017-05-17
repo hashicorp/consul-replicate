@@ -1,0 +1,14 @@
+DataDog Agent Check for Consul-Replicate
+===
+
+This check helps in monitoring the health of consul-replicate.
+
+To configure the check, write the master DC path into Consul KV
+and set it as `master_dc_path` in the check configuration (the
+.yaml file).
+
+For each replicated KV store prefix or value that you wish to monitor,
+add an entry under `check_paths` with the full KV path to a value that
+changes frequently. The check will read that value from both local
+and master DC Consul clusters and output a metric that tells whether
+the value is readable and whether it is the same between the clusters.
