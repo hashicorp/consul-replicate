@@ -1,11 +1,12 @@
 ## Consul Replicate CHANGELOG
 
-## v0.3.1.dev (January 28, 2017)
+## v0.4.0 (August 10, 2017)
 
 IMPROVEMENTS:
 
-  - Added additional customizations of underlying Consul communication at the
-    transport layer
+  - Updated internal APIs and shared libraries
+
+## v0.3.1.dev (January 28, 2017)
 
 BUG FIXES:
 
