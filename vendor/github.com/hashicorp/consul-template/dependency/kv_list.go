@@ -1,6 +1,7 @@
 package dependency
 
 import (
+	"encoding/gob"
 	"fmt"
 	"log"
 	"net/url"
@@ -17,6 +18,10 @@ var (
 	// KVListQueryRe is the regular expression to use.
 	KVListQueryRe = regexp.MustCompile(`\A` + prefixRe + dcRe + `\z`)
 )
+
+func init() {
+	gob.Register([]*KeyPair{})
+}
 
 // KeyPair is a simple Key-Value pair
 type KeyPair struct {
@@ -41,26 +46,17 @@ type KVListQuery struct {
 }
 
 // NewKVListQuery parses a string into a dependency.
-func NewKVListQuery(dc string, prefix string) (*KVListQuery, error) {
-	if dc == "" {
-		return nil, errors.New("kv.list: source datacenter required")
-	}
-
-	return &KVListQuery{
-		dc: dc,
-		prefix: prefix,
-		stopCh: make(chan struct{}, 1),
-	}, nil
-}
-
-func ParseSource(s string) (string, string, error) {
+func NewKVListQuery(s string) (*KVListQuery, error) {
 	if s != "" && !KVListQueryRe.MatchString(s) {
-		return "", "", fmt.Errorf("kv.list: invalid format: %q", s)
+		return nil, fmt.Errorf("kv.list: invalid format: %q", s)
 	}
 
 	m := regexpMatch(KVListQueryRe, s)
-
-	return m["dc"], m["prefix"], nil
+	return &KVListQuery{
+		stopCh: make(chan struct{}, 1),
+		dc:     m["dc"],
+		prefix: m["prefix"],
+	}, nil
 }
 
 // Fetch queries the Consul API defined by the given client.
