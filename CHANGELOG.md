@@ -2,6 +2,11 @@
 
 ## v0.3.1.dev (January 28, 2017)
 
+IMPROVEMENTS:
+
+  - Added additional customizations of underlying Consul communication at the
+    transport layer
+
 BUG FIXES:
 
   - Pass along the datacenter in parsed queries [GH-66]
