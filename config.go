@@ -1,453 +1,461 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hashicorp/consul-template/config"
-	dep "github.com/hashicorp/consul-template/dependency"
-	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/consul-template/signals"
 	"github.com/hashicorp/hcl"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
-// Config is used to configure Consul Replicate
+const (
+	// DefaultLogLevel is the default logging level.
+	DefaultLogLevel = "WARN"
+
+	// DefaultMaxStale is the default staleness permitted. This enables stale
+	// queries by default for performance reasons.
+	DefaultMaxStale = 2 * time.Second
+
+	// DefaultReloadSignal is the default signal for reload.
+	DefaultReloadSignal = syscall.SIGHUP
+
+	// DefaultKillSignal is the default signal for termination.
+	DefaultKillSignal = syscall.SIGINT
+
+	// DefaultStatusDir is the default directory to post status information.
+	DefaultStatusDir = "service/consul-replicate/statuses"
+)
+
+// Config is used to configure Consul ENV
 type Config struct {
-	// Path is the path to this configuration file on disk. This value is not
-	// read from disk by rather dynamically populated by the code so the Config
-	// has a reference to the path to the file on disk that created it.
-	Path string `mapstructure:"-"`
-
-	// Consul is the location of the Consul instance to query (may be an IP
-	// address or FQDN) with port.
-	Consul string `mapstructure:"consul"`
-
-	// Token is the Consul API token.
-	Token string `mapstructure:"token"`
-
-	// Prefixes is the list of key prefix dependencies.
-	Prefixes []*Prefix `mapstructure:"prefix"`
+	// Consul is the configuration for connecting to a Consul cluster.
+	Consul *config.ConsulConfig `mapstructure:"consul"`
 
 	// Excludes is the list of key prefixes to exclude from replication.
-	Excludes []*Exclude `mapstructure:"exclude"`
+	Excludes *ExcludeConfigs `mapstructure:"exclude"`
 
-	// Auth is the HTTP basic authentication for communicating with Consul.
-	Auth *AuthConfig `mapstructure:"auth"`
+	// KillSignal is the signal to listen for a graceful terminate event.
+	KillSignal *os.Signal `mapstructure:"kill_signal"`
+
+	// LogLevel is the level with which to log for this config.
+	LogLevel *string `mapstructure:"log_level"`
+
+	// MaxStale is the maximum amount of time for staleness from Consul as given
+	// by LastContact.
+	MaxStale *time.Duration `mapstructure:"max_stale"`
 
 	// PidFile is the path on disk where a PID file should be written containing
 	// this processes PID.
-	PidFile string `mapstructure:"pid_file"`
+	PidFile *string `mapstructure:"pid_file"`
 
-	// SSL indicates we should use a secure connection while talking to
-	// Consul. This requires Consul to be configured to serve HTTPS.
-	SSL *SSLConfig `mapstructure:"ssl"`
+	// Prefixes is the list of key prefix dependencies.
+	Prefixes *PrefixConfigs `mapstructure:"prefix"`
+
+	// ReloadSignal is the signal to listen for a reload event.
+	ReloadSignal *os.Signal `mapstructure:"reload_signal"`
+
+	// StatusDir is the path in the KV store that is used to store the replication
+	// statuses (default: "service/consul-replicate/statuses").
+	StatusDir *string `mapstructure:"status_dir"`
 
 	// Syslog is the configuration for syslog.
-	Syslog *SyslogConfig `mapstructure:"syslog"`
-
-	// MaxStale is the maximum amount of time for staleness from Consul as given
-	// by LastContact. If supplied, Consul Replicate will query all servers
-	// instead of just the leader.
-	MaxStale time.Duration `mapstructure:"max_stale"`
-
-	// Retry is the duration of time to wait between Consul failures.
-	Retry time.Duration `mapstructure:"retry"`
+	Syslog *config.SyslogConfig `mapstructure:"syslog"`
 
 	// Wait is the quiescence timers.
 	Wait *config.WaitConfig `mapstructure:"wait"`
-
-	// LogLevel is the level with which to log for this config.
-	LogLevel string `mapstructure:"log_level"`
-
-	// StatusDir is the path in the KV store that is used to store the
-	// replication statuses (default: "service/consul-replicate/statuses").
-	StatusDir string `mapstructure:"status_dir"`
-
-	// setKeys is the list of config keys that were set by the user.
-	setKeys map[string]struct{}
 }
 
 // Copy returns a deep copy of the current configuration. This is useful because
 // the nested data structures may be shared.
 func (c *Config) Copy() *Config {
-	o := new(Config)
-	o.Path = c.Path
-	o.Consul = c.Consul
-	o.Token = c.Token
+	var o Config
 
-	if c.Auth != nil {
-		o.Auth = &AuthConfig{
-			Enabled:  c.Auth.Enabled,
-			Username: c.Auth.Username,
-			Password: c.Auth.Password,
-		}
+	if c.Consul != nil {
+		o.Consul = c.Consul.Copy()
 	}
 
-	o.PidFile = c.PidFile
-
-	if c.SSL != nil {
-		o.SSL = &SSLConfig{
-			Enabled:    c.SSL.Enabled,
-			Verify:     c.SSL.Verify,
-			Cert:       c.SSL.Cert,
-			Key:        c.SSL.Key,
-			CaCert:     c.SSL.CaCert,
-			CaPath:     c.SSL.CaPath,
-			ServerName: c.SSL.ServerName,
-		}
+	if c.Excludes != nil {
+		o.Excludes = c.Excludes.Copy()
 	}
 
-	if c.Syslog != nil {
-		o.Syslog = &SyslogConfig{
-			Enabled:  c.Syslog.Enabled,
-			Facility: c.Syslog.Facility,
-		}
-	}
+	o.KillSignal = c.KillSignal
+
+	o.LogLevel = c.LogLevel
 
 	o.MaxStale = c.MaxStale
 
-	o.Prefixes = make([]*Prefix, len(c.Prefixes))
-	for i, p := range c.Prefixes {
-		o.Prefixes[i] = &Prefix{
-			Dependency:  p.Dependency,
-			Source:      p.Source,
-			Destination: p.Destination,
-			DataCenter:  p.DataCenter,
-		}
+	o.PidFile = c.PidFile
+
+	if c.Prefixes != nil {
+		o.Prefixes = c.Prefixes.Copy()
 	}
 
-	o.Excludes = make([]*Exclude, len(c.Excludes))
-	for i, p := range c.Excludes {
-		o.Excludes[i] = &Exclude{
-			Source: p.Source,
-		}
-	}
+	o.ReloadSignal = c.ReloadSignal
 
-	o.Retry = c.Retry
-
-	if c.Wait != nil {
-		o.Wait = &config.WaitConfig{
-			Min: c.Wait.Min,
-			Max: c.Wait.Max,
-		}
-	}
-
-	o.LogLevel = c.LogLevel
 	o.StatusDir = c.StatusDir
 
-	o.setKeys = c.setKeys
+	if c.Syslog != nil {
+		o.Syslog = c.Syslog.Copy()
+	}
 
-	return o
+	if c.Wait != nil {
+		o.Wait = c.Wait.Copy()
+	}
+
+	return &o
 }
 
-// Merge merges the values in config into this config object. Values in the
-// config object overwrite the values in c.
-func (c *Config) Merge(o *Config) {
-	if o.WasSet("path") {
-		c.Path = o.Path
+func (c *Config) Merge(o *Config) *Config {
+	if c == nil {
+		if o == nil {
+			return nil
+		}
+		return o.Copy()
 	}
 
-	if o.WasSet("consul") {
-		c.Consul = o.Consul
+	if o == nil {
+		return c.Copy()
 	}
 
-	if o.WasSet("token") {
-		c.Token = o.Token
-	}
+	r := c.Copy()
 
-	if o.WasSet("auth") {
-		if c.Auth == nil {
-			c.Auth = &AuthConfig{}
-		}
-		if o.WasSet("auth.username") {
-			c.Auth.Username = o.Auth.Username
-			c.Auth.Enabled = true
-		}
-		if o.WasSet("auth.password") {
-			c.Auth.Password = o.Auth.Password
-			c.Auth.Enabled = true
-		}
-		if o.WasSet("auth.enabled") {
-			c.Auth.Enabled = o.Auth.Enabled
-		}
-	}
-
-	if o.WasSet("pid_file") {
-		c.PidFile = o.PidFile
-	}
-
-	if o.WasSet("ssl") {
-		if c.SSL == nil {
-			c.SSL = &SSLConfig{}
-		}
-		if o.WasSet("ssl.verify") {
-			c.SSL.Verify = o.SSL.Verify
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.cert") {
-			c.SSL.Cert = o.SSL.Cert
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.key") {
-			c.SSL.Key = o.SSL.Key
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.ca_cert") {
-			c.SSL.CaCert = o.SSL.CaCert
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.ca_path") {
-			c.SSL.CaPath = o.SSL.CaPath
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.server_name") {
-			c.SSL.ServerName = o.SSL.ServerName
-			c.SSL.Enabled = true
-		}
-		if o.WasSet("ssl.enabled") {
-			c.SSL.Enabled = o.SSL.Enabled
-		}
-	}
-
-	if o.WasSet("syslog") {
-		if c.Syslog == nil {
-			c.Syslog = &SyslogConfig{}
-		}
-		if o.WasSet("syslog.facility") {
-			c.Syslog.Facility = o.Syslog.Facility
-			c.Syslog.Enabled = true
-		}
-		if o.WasSet("syslog.enabled") {
-			c.Syslog.Enabled = o.Syslog.Enabled
-		}
-	}
-
-	if o.WasSet("max_stale") {
-		c.MaxStale = o.MaxStale
-	}
-
-	if o.Prefixes != nil {
-		if c.Prefixes == nil {
-			c.Prefixes = make([]*Prefix, 0)
-		}
-
-		for _, prefix := range o.Prefixes {
-			c.Prefixes = append(c.Prefixes, &Prefix{
-				Dependency:  prefix.Dependency,
-				Source:      prefix.Source,
-				Destination: prefix.Destination,
-				DataCenter:  prefix.DataCenter,
-			})
-		}
+	if o.Consul != nil {
+		r.Consul = r.Consul.Merge(o.Consul)
 	}
 
 	if o.Excludes != nil {
-		if c.Excludes == nil {
-			c.Excludes = []*Exclude{}
-		}
-
-		for _, exclude := range o.Excludes {
-			c.Excludes = append(c.Excludes, &Exclude{
-				Source: exclude.Source,
-			})
-		}
+		r.Excludes = r.Excludes.Merge(o.Excludes)
 	}
 
-	if o.WasSet("retry") {
-		c.Retry = o.Retry
+	if o.KillSignal != nil {
+		r.KillSignal = o.KillSignal
 	}
 
-	if o.WasSet("wait") {
-		c.Wait = &config.WaitConfig{
-			Min: o.Wait.Min,
-			Max: o.Wait.Max,
-		}
+	if o.LogLevel != nil {
+		r.LogLevel = o.LogLevel
 	}
 
-	if o.WasSet("log_level") {
-		c.LogLevel = o.LogLevel
+	if o.MaxStale != nil {
+		r.MaxStale = o.MaxStale
 	}
 
-	if o.WasSet("status_dir") {
-		c.StatusDir = o.StatusDir
+	if o.PidFile != nil {
+		r.PidFile = o.PidFile
 	}
 
-	if c.setKeys == nil {
-		c.setKeys = make(map[string]struct{})
+	if o.Prefixes != nil {
+		r.Prefixes = r.Prefixes.Merge(o.Prefixes)
 	}
 
-	for k := range o.setKeys {
-		if _, ok := c.setKeys[k]; !ok {
-			c.setKeys[k] = struct{}{}
-		}
+	if o.ReloadSignal != nil {
+		r.ReloadSignal = o.ReloadSignal
+	}
+
+	if o.StatusDir != nil {
+		r.StatusDir = o.StatusDir
+	}
+
+	if o.Syslog != nil {
+		r.Syslog = r.Syslog.Merge(o.Syslog)
+	}
+
+	if o.Wait != nil {
+		r.Wait = r.Wait.Merge(o.Wait)
+	}
+
+	return r
+}
+
+// GoString defines the printable version of this struct.
+func (c *Config) GoString() string {
+	if c == nil {
+		return "(*Config)(nil)"
+	}
+
+	return fmt.Sprintf("&Config{"+
+		"Consul:%s, "+
+		"Excludes:%s, "+
+		"KillSignal:%s, "+
+		"LogLevel:%s, "+
+		"MaxStale:%s, "+
+		"PidFile:%s, "+
+		"Prefixes:%s, "+
+		"ReloadSignal:%s, "+
+		"StatusDir:%s, "+
+		"Syslog:%s, "+
+		"Wait:%s"+
+		"}",
+		c.Consul.GoString(),
+		c.Excludes.GoString(),
+		config.SignalGoString(c.KillSignal),
+		config.StringGoString(c.LogLevel),
+		config.TimeDurationGoString(c.MaxStale),
+		config.StringGoString(c.PidFile),
+		c.Prefixes.GoString(),
+		config.SignalGoString(c.ReloadSignal),
+		config.StringGoString(c.StatusDir),
+		c.Syslog.GoString(),
+		c.Wait.GoString(),
+	)
+}
+
+// DefaultConfig returns the default configuration struct. Certain environment
+// variables may be set which control the values for the default configuration.
+func DefaultConfig() *Config {
+	return &Config{
+		Consul:    config.DefaultConsulConfig(),
+		Excludes:  DefaultExcludeConfigs(),
+		Prefixes:  DefaultPrefixConfigs(),
+		StatusDir: config.String(DefaultStatusDir),
+		Syslog:    config.DefaultSyslogConfig(),
+		Wait:      config.DefaultWaitConfig(),
 	}
 }
 
-// WasSet determines if the given key was set in the config (as opposed to just
-// having the default value).
-func (c *Config) WasSet(key string) bool {
-	if _, ok := c.setKeys[key]; ok {
-		return true
+// Finalize ensures all configuration options have the default values, so it
+// is safe to dereference the pointers later down the line. It also
+// intelligently tries to activate stanzas that should be "enabled" because
+// data was given, but the user did not explicitly add "Enabled: true" to the
+// configuration.
+func (c *Config) Finalize() {
+	if c == nil {
+		return
 	}
-	return false
+
+	if c.Consul == nil {
+		c.Consul = config.DefaultConsulConfig()
+	}
+	c.Consul.Finalize()
+
+	if c.Excludes == nil {
+		c.Excludes = DefaultExcludeConfigs()
+	}
+	c.Excludes.Finalize()
+
+	if c.KillSignal == nil {
+		c.KillSignal = config.Signal(DefaultKillSignal)
+	}
+
+	if c.LogLevel == nil {
+		c.LogLevel = stringFromEnv([]string{
+			"CR_LOG",
+			"CONSUL_REPLICATE_LOG",
+		}, DefaultLogLevel)
+	}
+
+	if c.MaxStale == nil {
+		c.MaxStale = config.TimeDuration(DefaultMaxStale)
+	}
+
+	if c.Prefixes == nil {
+		c.Prefixes = DefaultPrefixConfigs()
+	}
+	c.Prefixes.Finalize()
+
+	if c.PidFile == nil {
+		c.PidFile = config.String("")
+	}
+
+	if c.ReloadSignal == nil {
+		c.ReloadSignal = config.Signal(DefaultReloadSignal)
+	}
+
+	if c.StatusDir == nil {
+		c.StatusDir = config.String(DefaultStatusDir)
+	}
+
+	if c.Syslog == nil {
+		c.Syslog = config.DefaultSyslogConfig()
+	}
+	c.Syslog.Finalize()
+
+	if c.Wait == nil {
+		c.Wait = config.DefaultWaitConfig()
+	}
+	c.Wait.Finalize()
 }
 
-// set is a helper function for marking a key as set.
-func (c *Config) set(key string) {
-	if _, ok := c.setKeys[key]; !ok {
-		c.setKeys[key] = struct{}{}
-	}
-}
-
-// ParseConfig reads the configuration file at the given path and returns a new
-// Config struct with the data populated.
-func ParseConfig(path string) (*Config, error) {
-	var errs *multierror.Error
-
-	// Read the contents of the file
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config at %q: %s", path, err)
-	}
-
-	// Parse the file (could be HCL or JSON)
+// Parse parses the given string contents as a config
+func Parse(s string) (*Config, error) {
 	var shadow interface{}
-	if err := hcl.Decode(&shadow, string(contents)); err != nil {
-		return nil, fmt.Errorf("error decoding config at %q: %s", path, err)
+	if err := hcl.Decode(&shadow, s); err != nil {
+		return nil, errors.Wrap(err, "error decoding config")
 	}
 
 	// Convert to a map and flatten the keys we want to flatten
 	parsed, ok := shadow.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("error converting config at %q", path)
+		return nil, errors.New("error converting config")
 	}
-	flattenKeys(parsed, []string{"auth", "ssl", "syslog"})
+
+	flattenKeys(parsed, []string{
+		"consul",
+		"consul.auth",
+		"consul.retry",
+		"consul.ssl",
+		"consul.transport",
+		"syslog",
+		"wait",
+	})
+
+	// Deprecations
+	// TODO remove in 0.5.0
+	flattenKeys(parsed, []string{
+		"auth",
+		"ssl",
+	})
+	if auth, ok := parsed["auth"]; ok {
+		log.Printf("[WARN] auth is now a child stanza inside consul instead of a " +
+			"top-level stanza. Update your configuration files and change auth {} " +
+			"to consul { auth { ... } } instead.")
+		consul, ok := parsed["consul"].(map[string]interface{})
+		if !ok {
+			consul = map[string]interface{}{}
+		}
+		consul["auth"] = auth
+		parsed["consul"] = consul
+		delete(parsed, "auth")
+	}
+	if _, ok := parsed["path"]; ok {
+		log.Printf("[WARN] path is no longer a key in the configuration. Please " +
+			"remove it and use the CLI option instead.")
+		delete(parsed, "path")
+	}
+	if retry, ok := parsed["retry"]; ok {
+		log.Printf("[WARN] retry is now a child stanza for consul instead of a " +
+			"top-level stanza. Update your configuration files and change retry {} " +
+			"to consul { retry { ... } } instead.")
+
+		consul, ok := parsed["consul"].(map[string]interface{})
+		if !ok {
+			consul = map[string]interface{}{}
+		}
+
+		r := map[string]interface{}{
+			"backoff":     retry,
+			"max_backoff": retry,
+		}
+
+		consul["retry"] = r
+		parsed["consul"] = consul
+
+		delete(parsed, "retry")
+	}
+	if ssl, ok := parsed["ssl"]; ok {
+		log.Printf("[WARN] ssl is now a child stanza for consul instead of a " +
+			"top-level stanza. Update your configuration files and change ssl {} " +
+			"to consul { ssl { ... } } instead.")
+
+		consul, ok := parsed["consul"].(map[string]interface{})
+		if !ok {
+			consul = map[string]interface{}{}
+		}
+
+		consul["ssl"] = ssl
+		parsed["consul"] = consul
+
+		delete(parsed, "ssl")
+	}
+	if token, ok := parsed["token"]; ok {
+		log.Printf("[WARN] token is now a child stanza inside consul instead of a " +
+			"top-level key. Update your configuration files and change token = \"...\" " +
+			"to consul { token = \"...\" } instead.")
+		consul, ok := parsed["consul"].(map[string]interface{})
+		if !ok {
+			consul = map[string]interface{}{}
+		}
+		consul["token"] = token
+		parsed["consul"] = consul
+		delete(parsed, "token")
+	}
 
 	// Create a new, empty config
-	c := new(Config)
+	var c Config
 
 	// Use mapstructure to populate the basic config fields
-	metadata := new(mapstructure.Metadata)
+	var md mapstructure.Metadata
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			StringToPrefixConfigFunc(),
+			MapToPrefixConfigFunc(),
+			StringToExcludeConfigFunc(),
+			config.ConsulStringToStructFunc(),
+			config.StringToFileModeFunc(),
+			signals.StringToSignalFunc(),
 			config.StringToWaitDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
 			mapstructure.StringToTimeDurationHookFunc(),
 		),
 		ErrorUnused: true,
-		Metadata:    metadata,
-		Result:      c,
+		Metadata:    &md,
+		Result:      &c,
 	})
 	if err != nil {
-		errs = multierror.Append(errs, err)
-		return nil, errs.ErrorOrNil()
+		return nil, errors.Wrap(err, "mapstructure decoder creation failed")
 	}
 	if err := decoder.Decode(parsed); err != nil {
-		errs = multierror.Append(errs, err)
-		return nil, errs.ErrorOrNil()
+		return nil, errors.Wrap(err, "mapstructure decode failed")
 	}
 
-	// Store a reference to the path where this config was read from
-	c.Path = path
-
-	// Parse the prefix sources
-	for _, cp := range c.Prefixes {
-		dc, prefix, err := dep.ParseSource(cp.Source)
-		if err != nil {
-			errs = multierror.Append(errs, err)
-			continue
-		}
-
-		if dc != "" && cp.DataCenter != "" && dc != cp.DataCenter {
-			errs = multierror.Append(errs, fmt.Errorf("conflicting datacenter req: %s / %s",
-				cp.Source, cp.DataCenter))
-			continue
-		}
-
-		if dc != "" {
-			cp.Source = prefix
-			cp.DataCenter = dc
-		}
-
-		if cp.Dependency, err = dep.NewKVListQuery(cp.DataCenter, cp.Source); err != nil {
-			errs = multierror.Append(errs, err)
-			continue
-		}
-
-		// If no destination was given, default to the prefix
-		if cp.Destination == "" {
-			cp.Destination = cp.Source
-		}
-	}
-
-	// Update the list of set keys
-	if c.setKeys == nil {
-		c.setKeys = make(map[string]struct{})
-	}
-	for _, key := range metadata.Keys {
-		if _, ok := c.setKeys[key]; !ok {
-			c.setKeys[key] = struct{}{}
-		}
-	}
-	c.setKeys["path"] = struct{}{}
-
-	d := DefaultConfig()
-	d.Merge(c)
-	c = d
-
-	return c, errs.ErrorOrNil()
+	return &c, nil
 }
 
-// DefaultConfig returns the default configuration struct.
-func DefaultConfig() *Config {
-	logLevel := os.Getenv("CONSUL_REPLICATE_LOG")
-	if logLevel == "" {
-		logLevel = "WARN"
+// Must returns a config object that must compile. If there are any errors, this
+// function will panic. This is most useful in testing or constants.
+func Must(s string) *Config {
+	c, err := Parse(s)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	return &Config{
-		Auth: &AuthConfig{
-			Enabled: false,
-		},
-		SSL: &SSLConfig{
-			Enabled: false,
-			Verify:  true,
-		},
-		Syslog: &SyslogConfig{
-			Enabled:  false,
-			Facility: "LOCAL0",
-		},
-		LogLevel:  logLevel,
-		Prefixes:  []*Prefix{},
-		Excludes:  []*Exclude{},
-		Retry:     5 * time.Second,
-		StatusDir: "service/consul-replicate/statuses",
-		Wait: &config.WaitConfig{
-			Min: config.TimeDuration(150 * time.Millisecond),
-			Max: config.TimeDuration(400 * time.Millisecond),
-		},
-		setKeys: make(map[string]struct{}),
-	}
+	return c
 }
 
-// ConfigFromPath iterates and merges all configuration files in a given
+// TestConfig returns a default, finalized config, with the provided
+// configuration taking precedence.
+func TestConfig(c *Config) *Config {
+	d := DefaultConfig().Merge(c)
+	d.Finalize()
+	return d
+}
+
+// FromFile reads the configuration file at the given path and returns a new
+// Config struct with the data populated.
+func FromFile(path string) (*Config, error) {
+	c, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "from file: "+path)
+	}
+
+	config, err := Parse(string(c))
+	if err != nil {
+		return nil, errors.Wrap(err, "from file: "+path)
+	}
+	return config, nil
+}
+
+// FromPath iterates and merges all configuration files in a given
 // directory, returning the resulting config.
-func ConfigFromPath(path string) (*Config, error) {
+func FromPath(path string) (*Config, error) {
 	// Ensure the given filepath exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, fmt.Errorf("config: missing file/folder: %s", path)
+		return nil, errors.Wrap(err, "missing file/folder: "+path)
 	}
 
 	// Check if a file was given or a path to a directory
 	stat, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("config: error stating file: %s", err)
+		return nil, errors.Wrap(err, "failed stating file: "+path)
 	}
 
 	// Recursively parse directories, single load files
@@ -455,11 +463,11 @@ func ConfigFromPath(path string) (*Config, error) {
 		// Ensure the given filepath has at least one config file
 		_, err := ioutil.ReadDir(path)
 		if err != nil {
-			return nil, fmt.Errorf("config: error listing directory: %s", err)
+			return nil, errors.Wrap(err, "failed listing dir: "+path)
 		}
 
 		// Create a blank config to merge off of
-		config := DefaultConfig()
+		var c *Config
 
 		// Potential bug: Walk does not follow symlinks!
 		err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
@@ -474,103 +482,111 @@ func ConfigFromPath(path string) (*Config, error) {
 			}
 
 			// Parse and merge the config
-			newConfig, err := ParseConfig(path)
+			newConfig, err := FromFile(path)
 			if err != nil {
 				return err
 			}
-			config.Merge(newConfig)
+			c = c.Merge(newConfig)
 
 			return nil
 		})
 
 		if err != nil {
-			return nil, fmt.Errorf("config: walk error: %s", err)
+			return nil, errors.Wrap(err, "walk error")
 		}
 
-		return config, nil
+		return c, nil
 	} else if stat.Mode().IsRegular() {
-		return ParseConfig(path)
+		return FromFile(path)
 	}
 
-	return nil, fmt.Errorf("config: unknown filetype: %q", stat.Mode().String())
+	return nil, fmt.Errorf("unknown filetype: %q", stat.Mode().String())
 }
 
-// AuthConfig is the HTTP basic authentication data.
-type AuthConfig struct {
-	Enabled  bool   `mapstructure:"enabled"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
+func stringFromEnv(list []string, def string) *string {
+	for _, s := range list {
+		if v := os.Getenv(s); v != "" {
+			return config.String(strings.TrimSpace(v))
+		}
+	}
+	return config.String(def)
 }
 
-// SSLConfig is the configuration for SSL.
-type SSLConfig struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	Verify     bool   `mapstructure:"verify"`
-	Cert       string `mapstructure:"cert"`
-	Key        string `mapstructure:"key"`
-	CaCert     string `mapstructure:"ca_cert"`
-	CaPath     string `mapstructure:"ca_path"`
-	ServerName string `mapstructure:"server_name"`
+func stringFromFile(list []string, def string) *string {
+	for _, s := range list {
+		c, err := ioutil.ReadFile(s)
+		if err == nil {
+			return config.String(strings.TrimSpace(string(c)))
+		}
+	}
+	return config.String(def)
 }
 
-// SyslogConfig is the configuration for syslog.
-type SyslogConfig struct {
-	Enabled  bool   `mapstructure:"enabled"`
-	Facility string `mapstructure:"facility"`
+func antiboolFromEnv(list []string, def bool) *bool {
+	for _, s := range list {
+		if v := os.Getenv(s); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err == nil {
+				return config.Bool(!b)
+			}
+		}
+	}
+	return config.Bool(def)
 }
 
-// Prefix is the representation of a key prefix.
-type Prefix struct {
-	Dependency  *dep.KVListQuery `mapstructure:"-"`
-	Source      string           `mapstructure:"source"`
-	DataCenter  string           `mapstructure:"datacenter"`
-	Destination string           `mapstructure:"destination"`
+func boolFromEnv(list []string, def bool) *bool {
+	for _, s := range list {
+		if v := os.Getenv(s); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err == nil {
+				return config.Bool(b)
+			}
+		}
+	}
+	return config.Bool(def)
 }
 
-// Exclude is a key path prefix to exclude from replication
-type Exclude struct {
-	Source string `mapstructure:"source"`
-}
-
-// ParsePrefix parses a prefix of the format "source@dc:destination" into the
-// Prefix component.
-func ParsePrefix(s string) (*Prefix, error) {
-	if len(strings.TrimSpace(s)) < 1 {
-		return nil, errors.New("cannot specify empty prefix declaration")
+// flattenKeys is a function that takes a map[string]interface{} and recursively
+// flattens any keys that are a []map[string]interface{} where the key is in the
+// given list of keys.
+func flattenKeys(m map[string]interface{}, keys []string) {
+	keyMap := make(map[string]struct{})
+	for _, key := range keys {
+		keyMap[key] = struct{}{}
 	}
 
-	parts := strings.SplitN(s, ":", 2)
+	var flatten func(map[string]interface{}, string)
+	flatten = func(m map[string]interface{}, parent string) {
+		for k, v := range m {
+			// Calculate the map key, since it could include a parent.
+			mapKey := k
+			if parent != "" {
+				mapKey = parent + "." + k
+			}
 
-	var source, destination string
-	switch len(parts) {
-	case 1:
-		source, destination = parts[0], ""
-	case 2:
-		source, destination = parts[0], parts[1]
-	default:
-		return nil, fmt.Errorf("invalid format: %q", s)
+			if _, ok := keyMap[mapKey]; !ok {
+				continue
+			}
+
+			switch typed := v.(type) {
+			case []map[string]interface{}:
+				if len(typed) > 0 {
+					last := typed[len(typed)-1]
+					flatten(last, mapKey)
+					m[k] = last
+				} else {
+					m[k] = nil
+				}
+			case map[string]interface{}:
+				flatten(typed, mapKey)
+				m[k] = typed
+			default:
+				m[k] = v
+			}
+		}
 	}
 
-	dc, prefix, err := dep.ParseSource(source)
-	if err != nil {
-		return nil, err
-	}
-
-	d, err := dep.NewKVListQuery(dc, prefix)
-	if err != nil {
-		return nil, err
-	}
-
-	if destination == "" {
-		destination = prefix
-	}
-
-	return &Prefix{
-		Dependency:  d,
-		Source:      prefix,
-		DataCenter:  dc,
-		Destination: destination,
-	}, nil
+	flatten(m, "")
 }
 
 // regexpMatch matches the given regexp and extracts the match groups into a
@@ -591,41 +607,4 @@ func regexpMatch(re *regexp.Regexp, q string) map[string]string {
 	}
 
 	return m
-}
-
-// flattenKeys is a function that takes a map[string]interface{} and recursively
-// flattens any keys that are a []map[string]interface{} where the key is in the
-// given list of keys.
-func flattenKeys(m map[string]interface{}, keys []string) {
-	keyMap := make(map[string]struct{})
-	for _, key := range keys {
-		keyMap[key] = struct{}{}
-	}
-
-	var flatten func(map[string]interface{})
-	flatten = func(m map[string]interface{}) {
-		for k, v := range m {
-			if _, ok := keyMap[k]; !ok {
-				continue
-			}
-
-			switch typed := v.(type) {
-			case []map[string]interface{}:
-				if len(typed) > 0 {
-					last := typed[len(typed)-1]
-					flatten(last)
-					m[k] = last
-				} else {
-					m[k] = nil
-				}
-			case map[string]interface{}:
-				flatten(typed)
-				m[k] = typed
-			default:
-				m[k] = v
-			}
-		}
-	}
-
-	flatten(m)
 }

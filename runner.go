@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"regexp"
 	"sync"
@@ -15,6 +14,7 @@ import (
 
 	"strings"
 
+	"github.com/hashicorp/consul-template/config"
 	dep "github.com/hashicorp/consul-template/dependency"
 	"github.com/hashicorp/consul-template/watch"
 	"github.com/hashicorp/consul/api"
@@ -75,12 +75,8 @@ type Runner struct {
 func NewRunner(config *Config, once bool) (*Runner, error) {
 	log.Printf("[INFO] (runner) creating new runner (once: %v)", once)
 
-	// configuration settings override the defaults
-	mergedDefaultConfig := DefaultConfig()
-	mergedDefaultConfig.Merge(config)
-
 	runner := &Runner{
-		config: mergedDefaultConfig,
+		config: config,
 		once:   once,
 	}
 
@@ -103,14 +99,14 @@ func (r *Runner) Start() {
 	}
 
 	// Add the dependencies to the watcher
-	for _, prefix := range r.config.Prefixes {
+	for _, prefix := range *r.config.Prefixes {
 		r.watcher.Add(prefix.Dependency)
 	}
 
 	// If once mode is on, wait until we get data back from all the views before proceeding
 	onceCh := make(chan struct{}, 1)
 	if r.once {
-		for i := 0; i < len(r.config.Prefixes); i++ {
+		for i := 0; i < len(*r.config.Prefixes); i++ {
 			select {
 			case view := <-r.watcher.DataCh():
 				r.Receive(view)
@@ -199,7 +195,7 @@ func (r *Runner) Receive(view *watch.View) {
 func (r *Runner) Run() error {
 	log.Printf("[INFO] (runner) running")
 
-	prefixes := r.config.Prefixes
+	prefixes := *r.config.Prefixes
 	doneCh := make(chan struct{}, len(prefixes))
 	errCh := make(chan error, len(prefixes))
 
@@ -224,10 +220,9 @@ func (r *Runner) Run() error {
 // init creates the Runner's underlying data structures and returns an error if
 // any problems occur.
 func (r *Runner) init() error {
-	// Ensure we have default vaults
-	config := DefaultConfig()
-	config.Merge(r.config)
-	r.config = config
+	// Ensure default configuration values
+	r.config = DefaultConfig().Merge(r.config)
+	r.config.Finalize()
 
 	// Print the final config for debugging
 	result, err := json.MarshalIndent(r.config, "", "  ")
@@ -263,7 +258,7 @@ func (r *Runner) init() error {
 }
 
 // get returns the data for a particular view in the watcher.
-func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
+func (r *Runner) get(prefix *PrefixConfig) (*watch.View, bool) {
 	r.RLock()
 	defer r.RUnlock()
 	result, ok := r.data[prefix.Dependency.String()]
@@ -273,7 +268,7 @@ func (r *Runner) get(prefix *Prefix) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan struct{}, errCh chan error) {
+func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.clients.Consul().Agent().Self()
 	if err != nil {
@@ -281,7 +276,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 		return
 	}
 	localDatacenter := info["Config"]["Datacenter"].(string)
-	if localDatacenter == prefix.DataCenter {
+	if localDatacenter == config.StringVal(prefix.Datacenter) {
 		errCh <- fmt.Errorf("local datacenter cannot be the source datacenter")
 		return
 	}
@@ -315,16 +310,17 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 	updates := 0
 	usedKeys := make(map[string]struct{}, len(pairs))
 	for _, pair := range pairs {
-		key := prefix.Destination + strings.TrimPrefix(pair.Path, prefix.Source)
+		key := config.StringVal(prefix.Destination) +
+			strings.TrimPrefix(pair.Path, config.StringVal(prefix.Source))
 		usedKeys[key] = struct{}{}
 
 		// Ignore if the key falls under an excluded prefix
-		if len(excludes) > 0 {
+		if len(*excludes) > 0 {
 			excluded := false
-			for _, exclude := range excludes {
-				if strings.HasPrefix(pair.Path, exclude.Source) {
+			for _, exclude := range *excludes {
+				if strings.HasPrefix(pair.Path, config.StringVal(exclude.Source)) {
 					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding",
-						pair.Path, exclude.Source)
+						pair.Path, config.StringVal(exclude.Source))
 					excluded = true
 				}
 			}
@@ -373,7 +369,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 
 	// Handle deletes
 	deletes := 0
-	localKeys, _, err := kv.Keys(prefix.Destination, "", nil)
+	localKeys, _, err := kv.Keys(config.StringVal(prefix.Destination), "", nil)
 	if err != nil {
 		errCh <- fmt.Errorf("failed to list keys: %s", err)
 		return
@@ -382,10 +378,10 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 		excluded := false
 
 		// Ignore if the key falls under an excluded prefix
-		if len(excludes) > 0 {
-			sourceKey := strings.Replace(key, prefix.Destination, prefix.Source, -1)
-			for _, exclude := range excludes {
-				if strings.HasPrefix(sourceKey, exclude.Source) {
+		if len(*excludes) > 0 {
+			sourceKey := strings.Replace(key, config.StringVal(prefix.Destination), config.StringVal(prefix.Source), -1)
+			for _, exclude := range *excludes {
+				if strings.HasPrefix(sourceKey, config.StringVal(exclude.Source)) {
 					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
 						sourceKey, exclude.Source)
 					excluded = true
@@ -405,8 +401,8 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 
 	// Update our status
 	status.LastReplicated = lastIndex
-	status.Source = prefix.Source
-	status.Destination = prefix.Destination
+	status.Source = config.StringVal(prefix.Source)
+	status.Destination = config.StringVal(prefix.Destination)
 	if err := r.setStatus(prefix, status); err != nil {
 		errCh <- fmt.Errorf("failed to checkpoint status: %s", err)
 		return
@@ -421,7 +417,7 @@ func (r *Runner) replicate(prefix *Prefix, excludes []*Exclude, doneCh chan stru
 }
 
 // getStatus is used to read the last replication status.
-func (r *Runner) getStatus(prefix *Prefix) (*Status, error) {
+func (r *Runner) getStatus(prefix *PrefixConfig) (*Status, error) {
 	kv := r.clients.Consul().KV()
 	pair, _, err := kv.Get(r.statusPath(prefix), nil)
 	if err != nil {
@@ -438,7 +434,7 @@ func (r *Runner) getStatus(prefix *Prefix) (*Status, error) {
 }
 
 // setStatus is used to update the last replication status.
-func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
+func (r *Runner) setStatus(prefix *PrefixConfig, status *Status) error {
 	// Encode the JSON as pretty so operators can easily view it in the Consul UI.
 	enc, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
@@ -454,16 +450,16 @@ func (r *Runner) setStatus(prefix *Prefix, status *Status) error {
 	return err
 }
 
-func (r *Runner) statusPath(prefix *Prefix) string {
-	plain := fmt.Sprintf("%s-%s", prefix.Source, prefix.Destination)
+func (r *Runner) statusPath(prefix *PrefixConfig) string {
+	plain := fmt.Sprintf("%s-%s", config.StringVal(prefix.Source), config.StringVal(prefix.Destination))
 	hash := md5.Sum([]byte(plain))
 	enc := hex.EncodeToString(hash[:])
-	return strings.TrimRight(r.config.StatusDir, "/") + "/" + enc
+	return strings.TrimRight(config.StringVal(r.config.StatusDir), "/") + "/" + enc
 }
 
 // storePid is used to write out a PID file to disk.
 func (r *Runner) storePid() error {
-	path := r.config.PidFile
+	path := config.StringVal(r.config.PidFile)
 	if path == "" {
 		return nil
 	}
@@ -486,7 +482,7 @@ func (r *Runner) storePid() error {
 
 // deletePid is used to remove the PID on exit.
 func (r *Runner) deletePid() error {
-	path := r.config.PidFile
+	path := config.StringVal(r.config.PidFile)
 	if path == "" {
 		return nil
 	}
@@ -513,18 +509,25 @@ func newClientSet(c *Config) (*dep.ClientSet, error) {
 	clients := dep.NewClientSet()
 
 	if err := clients.CreateConsulClient(&dep.CreateConsulClientInput{
-		Address:      c.Consul,
-		Token:        c.Token,
-		AuthEnabled:  c.Auth.Enabled,
-		AuthUsername: c.Auth.Username,
-		AuthPassword: c.Auth.Password,
-		SSLEnabled:   c.SSL.Enabled,
-		SSLVerify:    c.SSL.Verify,
-		SSLCert:      c.SSL.Cert,
-		SSLKey:       c.SSL.Key,
-		SSLCACert:    c.SSL.CaCert,
-		SSLCAPath:    c.SSL.CaPath,
-		ServerName:   c.SSL.ServerName,
+		Address:                      config.StringVal(c.Consul.Address),
+		Token:                        config.StringVal(c.Consul.Token),
+		AuthEnabled:                  config.BoolVal(c.Consul.Auth.Enabled),
+		AuthUsername:                 config.StringVal(c.Consul.Auth.Username),
+		AuthPassword:                 config.StringVal(c.Consul.Auth.Password),
+		SSLEnabled:                   config.BoolVal(c.Consul.SSL.Enabled),
+		SSLVerify:                    config.BoolVal(c.Consul.SSL.Verify),
+		SSLCert:                      config.StringVal(c.Consul.SSL.Cert),
+		SSLKey:                       config.StringVal(c.Consul.SSL.Key),
+		SSLCACert:                    config.StringVal(c.Consul.SSL.CaCert),
+		SSLCAPath:                    config.StringVal(c.Consul.SSL.CaPath),
+		ServerName:                   config.StringVal(c.Consul.SSL.ServerName),
+		TransportDialKeepAlive:       config.TimeDurationVal(c.Consul.Transport.DialKeepAlive),
+		TransportDialTimeout:         config.TimeDurationVal(c.Consul.Transport.DialTimeout),
+		TransportDisableKeepAlives:   config.BoolVal(c.Consul.Transport.DisableKeepAlives),
+		TransportIdleConnTimeout:     config.TimeDurationVal(c.Consul.Transport.IdleConnTimeout),
+		TransportMaxIdleConns:        config.IntVal(c.Consul.Transport.MaxIdleConns),
+		TransportMaxIdleConnsPerHost: config.IntVal(c.Consul.Transport.MaxIdleConnsPerHost),
+		TransportTLSHandshakeTimeout: config.TimeDurationVal(c.Consul.Transport.TLSHandshakeTimeout),
 	}); err != nil {
 		return nil, fmt.Errorf("runner: %s", err)
 	}
@@ -537,22 +540,11 @@ func newWatcher(c *Config, clients *dep.ClientSet, once bool) (*watch.Watcher, e
 	log.Printf("[INFO] (runner) creating watcher")
 
 	w, err := watch.NewWatcher(&watch.NewWatcherInput{
-		Clients:    clients,
-		MaxStale:   c.MaxStale,
-		Once:       once,
-		RenewVault: false,
-		RetryFuncConsul: func(retry int) (bool, time.Duration) {
-			if retry > 5 {
-				return false, 0
-			}
-
-			base := math.Pow(2, float64(retry))
-			sleep := time.Duration(base) * c.Retry
-
-			return true, sleep
-		},
+		Clients:          clients,
+		MaxStale:         config.TimeDurationVal(c.MaxStale),
+		Once:             once,
+		RetryFuncConsul:  watch.RetryFunc(c.Consul.Retry.RetryFunc()),
 		RetryFuncDefault: nil,
-		RetryFuncVault:   nil,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "runner")
