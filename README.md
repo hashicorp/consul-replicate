@@ -1,156 +1,271 @@
-Consul Replicate
-================
-[![Build Status](http://img.shields.io/travis/hashicorp/consul-replicate.svg?style=flat-square)][travis]
+# Consul Replicate
 
-[travis]: https://travis-ci.org/hashicorp/consul-replicate
+[![Build Status](http://img.shields.io/travis/hashicorp/consul-replicate.svg?style=flat-square)](https://travis-ci.org/hashicorp/consul-replicate)
 
-This project provides a convenient way to replicate K/V pairs across multiple [Consul][] data centers using the `consul-replicate` daemon.
+This project provides a convenient way to replicate values from one
+[Consul][consul] datacenter to another using the `consul-replicate` daemon.
 
-The daemon `consul-replicate` integrates with [Consul][] to perform cross-data-center K/V replication. This makes it possible to manage application configuration from a central data center, with low-latency asynchronous replication to other data centers, thus avoiding the need for smart clients that would need to write to all data centers and queue writes to handle network failures.
+The daemon `consul-replicate` integrates with [Consul][consul] to perform
+cross-data-center K/V replication. This makes it possible to manage application
+configuration from a central data center, with low-latency asynchronous
+replication to other data centers, thus avoiding the need for smart clients that
+would need to write to all data centers and queue writes to handle network
+failures.
 
-**The documentation in this README corresponds to the master branch of Consul Replicate. It may contain unreleased features or different APIs than the most recently released version. Please see the Git tag that corresponds to your version of Consul Replicate for the proper documentation.**
+---
+
+**The documentation in this README corresponds to the master branch of Consul Replicate. It may contain unreleased features or different APIs than the most recently released version.**
+
+**Please see the [Git tag](https://github.com/hashicorp/consul-replicate/releases) that corresponds to your version of Consul Replicate for the proper documentation.**
+
+---
 
 
-Installation
-------------
-You can download a released `consul-replicate` artifact from [the Consul Replicate release page](https://releases.hashicorp.com/consul-replicate/). If you wish to compile from source, you will need to have build tools and [Go][] installed:
+## Installation
+
+1. Download a pre-compiled, released version from the [Consul Replicate releases page][releases].
+
+1. Extract the binary using `unzip` or `tar`.
+
+1. Move the binary into `$PATH`.
+
+To compile from source, please see the instructions in the
+[contributing section](#contributing).
+
+## Usage
+
+For the full list of options:
 
 ```shell
-$ git clone https://github.com/hashicorp/consul-replicate.git
-$ cd consul-replicate
-$ make
+$ consul-replicate -h
 ```
 
-This process will create `bin/consul-replicate` which may be invoked as a binary.
+### Command Line Flags
 
-
-Usage
------
-### Options
-|       Option      | Description |
-| ----------------- |------------ |
-| `auth`            | The basic authentication username (and optional password), separated by a colon. There is no default value.
-| `consul`*         | The location of the Consul instance to query (may be an IP address or FQDN) with port.
-| `max-stale`       | The maximum staleness of a query. If specified, Consul will distribute work among all servers instead of just the leader. The default value is 0 (none).
-| `ssl`             | Use HTTPS while talking to Consul. Requires the Consul server to be configured to serve secure connections. The default value is false.
-| `ssl-verify`      | Verify certificates when connecting via SSL. This requires the use of `-ssl`. The default value is true.
-| `syslog`          | Send log output to syslog (in addition to stdout and stderr). The default value is false.
-| `syslog-facility` | The facility to use when sending to syslog. This requires the use of `-syslog`. The default value is `LOCAL0`.
-| `token`           | The [Consul API token][Consul ACLs]. There is no default value.
-| `prefix`*         | The source prefix including the data center, with optional destination prefix, separated by a colon (`:`). This option is additive and may be specified multiple times for multiple prefixes to replicate.
-| `exclude`         | A prefix to exclude during replication. This option is additive and may be specified multiple times for multiple prefixes to exclude.
-| `wait`            | The `minimum(:maximum)` to wait for stability before replicating, separated by a colon (`:`). If the optional maximum value is omitted, it is assumed to be 4x the required minimum value. There is no default value.
-| `retry`           | The amount of time to wait if Consul returns an error when communicating with the API. The default value is 5 seconds.
-| `config`          | The path to a configuration file or directory of configuration files on disk, relative to the current working directory. Values specified on the CLI take precedence over values specified in the configuration file. There is no default value.
-| `log-level`       | The log level for output. This applies to the stdout/stderr logging as well as syslog logging (if enabled). Valid values are "debug", "info", "warn", and "err". The default value is "warn".
-| `once`            | Run Consul Replicate once and exit (as opposed to the default behavior of daemon). _(CLI-only)_
-| `version`         | Output version information and quit. _(CLI-only)_
-
-\* = Required parameter
-
-Additionally, the following options are available for advanced users. It is not recommended you change these values unless you have a specific use case.
-
-|       Option      | Description |
-| ----------------- |------------ |
-| `status-dir`      | The path in the KV store that is used to store the replication statuses. The default value is "service/consul-replicate/statuses".
-
-### Command Line
-The CLI interface supports all of the options detailed above.
+The CLI interface supports all options in the configuration file and visa-versa.
+Here are a few examples of common integrations on the command line.
 
 Replicate all keys under "global" from the nyc1 data center:
 
-```shell
+```sh
 $ consul-replicate \
   -prefix "global@nyc1"
 ```
 
-Replicate all keys under "global" from the nyc1 data center, renaming the key to "default" in the replicated stores:
+Replicate all keys under "global" from the nyc1 data center, renaming the key to
+"default" in the replicated stores:
 
-```shell
+```sh
 $ consul-replicate \
   -prefix "global@nyc1:default"
 ```
 
-Replicate all keys under "global" from the nyc1 data center, but do not poll or watch for changes (just do it one time):
+Replicate all keys under "global" from the nyc1 data center, but do not poll or
+watch for changes (just do it one time):
 
-```shell
+```sh
 $ consul-replicate \
   -prefix "global@nyc1" \
   -once
 ```
 
-Replicate all keys under "global" from the nyc1 data center, but exclude the global/private prefix:
+Replicate all keys under "global" from the nyc1 data center, but exclude the
+global/private prefix:
 
-```shell
+```sh
 $ consul-replicate \
   -prefix "global@nyc1" \
   -exclude "global/private" \
   -once
 ```
 
-### Configuration File(s)
-The Consul Replicate configuration files are written in [HashiCorp Configuration Language (HCL)][HCL]. By proxy, this means the Consul Replicate configuration file is JSON-compatible. For more information, please see the [HCL specification][HCL].
+### Configuration File Format
 
-The Configuration file syntax interface supports all of the options detailed above, unless otherwise noted in the table.
+Configuration files are written in the [HashiCorp Configuration Language][hcl].
+By proxy, this means the configuration is also JSON compatible.
 
-```javascript
-consul = "127.0.0.1:8500"
-token = "abcd1234"
-retry = "10s"
+```hcl
+# This denotes the start of the configuration section for Consul. All values
+# contained in this section pertain to Consul.
+consul {
+  # This block specifies the basic authentication information to pass with the
+  # request. For more information on authentication, please see the Consul
+  # documentation.
+  auth {
+    enabled  = true
+    username = "test"
+    password = "test"
+  }
+
+  # This is the address of the Consul agent. By default, this is
+  # 127.0.0.1:8500, which is the default bind and port for a local Consul
+  # agent. It is not recommended that you communicate directly with a Consul
+  # server, and instead communicate with the local Consul agent. There are many
+  # reasons for this, most importantly the Consul agent is able to multiplex
+  # connections to the Consul server and reduce the number of open HTTP
+  # connections. Additionally, it provides a "well-known" IP address for which
+  # clients can connect.
+  address = "127.0.0.1:8500"
+
+  # This is the ACL token to use when connecting to Consul. If you did not
+  # enable ACLs on your Consul cluster, you do not need to set this option.
+  #
+  # This option is also available via the environment variable CONSUL_TOKEN.
+  token = "abcd1234"
+
+  # This controls the retry behavior when an error is returned from Consul.
+  # Consul Replicate is highly fault tolerant, meaning it does not exit in the
+  # face of failure. Instead, it uses exponential back-off and retry functions
+  # to wait for the cluster to become available, as is customary in distributed
+  # systems.
+  retry {
+    # This enabled retries. Retries are enabled by default, so this is
+    # redundant.
+    enabled = true
+
+    # This specifies the number of attempts to make before giving up. Each
+    # attempt adds the exponential backoff sleep time. Setting this to
+    # zero will implement an unlimited number of retries.
+    attempts = 12
+
+    # This is the base amount of time to sleep between retry attempts. Each
+    # retry sleeps for an exponent of 2 longer than this base. For 5 retries,
+    # the sleep times would be: 250ms, 500ms, 1s, 2s, then 4s.
+    backoff = "250ms"
+
+    # This is the maximum amount of time to sleep between retry attempts.
+    # When max_backoff is set to zero, there is no upper limit to the
+    # exponential sleep between retry attempts.
+    # If max_backoff is set to 10s and backoff is set to 1s, sleep times
+    # would be: 1s, 2s, 4s, 8s, 10s, 10s, ...
+    max_backoff = "1m"
+  }
+
+  # This block configures the SSL options for connecting to the Consul server.
+  ssl {
+    # This enables SSL. Specifying any option for SSL will also enable it.
+    enabled = true
+
+    # This enables SSL peer verification. The default value is "true", which
+    # will check the global CA chain to make sure the given certificates are
+    # valid. If you are using a self-signed certificate that you have not added
+    # to the CA chain, you may want to disable SSL verification. However, please
+    # understand this is a potential security vulnerability.
+    verify = false
+
+    # This is the path to the certificate to use to authenticate. If just a
+    # certificate is provided, it is assumed to contain both the certificate and
+    # the key to convert to an X509 certificate. If both the certificate and
+    # key are specified, Consul Replicate will automatically combine them into an
+    # X509 certificate for you.
+    cert = "/path/to/client/cert"
+    key  = "/path/to/client/key"
+
+    # This is the path to the certificate authority to use as a CA. This is
+    # useful for self-signed certificates or for organizations using their own
+    # internal certificate authority.
+    ca_cert = "/path/to/ca"
+
+    # This is the path to a directory of PEM-encoded CA cert files. If both
+    # `ca_cert` and `ca_path` is specified, `ca_cert` is preferred.
+    ca_path = "path/to/certs/"
+
+    # This sets the SNI server name to use for validation.
+    server_name = "my-server.com"
+  }
+}
+
+# This is the list of keys to exclude if they are found in the prefix. This can
+# be specified multiple times to exclude multiple keys from replication.
+exclude {
+  source = "my-key"
+}
+
+# This is the signal to listen for to trigger a graceful stop. The default value
+# is shown below. Setting this value to the empty string will cause Consul
+# Replicate to not listen for any graceful stop signals.
+kill_signal = "SIGINT"
+
+# This is the log level. If you find a bug in Consul Replicate, please enable
+# debug logs so we can help identify the issue. This is also available as a
+# command line flag.
+log_level = "warn"
+
+# This is the maximum interval to allow "stale" data. By default, only the
+# Consul leader will respond to queries; any requests to a follower will
+# forward to the leader. In large clusters with many requests, this is not as
+# scalable, so this option allows any follower to respond to a query, so long
+# as the last-replicated data is within these bounds. Higher values result in
+# less cluster load, but are more likely to have outdated data.
 max_stale = "10m"
-log_level = "debug"
 
-auth {
-  enabled = true
-  username = "test"
-  password = "test"
-}
+# This is the path to store a PID file which will contain the process ID of the
+# Consul Replicate process. This is useful if you plan to send custom signals
+# to the process.
+pid_file = "/path/to/pid"
 
-ssl {
-  enabled = true
-  verify = false
-}
-
-syslog {
-  enabled = true
-  facility = "LOCAL5"
-}
-
+# This is the prefix and datacenter to replicate and the resulting destination.
 prefix {
-  source = "global@nyc1"
-}
-
-prefix {
-  source = "global@nyc1"
+  source      = "global"
+  datacenter  = "nyc1"
   destination = "default"
 }
 
-prefix {
-  // Multiple prefix definitions are supported
+# This is the signal to listen for to trigger a reload event. The default value
+# is shown below. Setting this value to the empty string will cause Consul
+# Replicate to not listen for any reload signals.
+reload_signal = "SIGHUP"
+
+# This is the path in Consul to store replication and leader status.
+status_dir = "service/consul-replicate/statuses"
+
+# This block defines the configuration for connecting to a syslog server for
+# logging.
+syslog {
+  # This enables syslog logging. Specifying any other option also enables
+  # syslog logging.
+  enabled = true
+
+  # This is the name of the syslog facility to log to.
+  facility = "LOCAL5"
 }
 
-exclude {
-  source = "vault/core/lock"
+# This is the quiescence timers; it defines the minimum and maximum amount of
+# time to wait for the cluster to reach a consistent state before rendering a
+# replicating. This is useful to enable in systems that have a lot of flapping,
+# because it will reduce the the number of times a replication occurs.
+wait {
+  min = "5s"
+  max = "10s"
 }
 ```
 
-If a directory is given instead of a file, all files in the directory (recursively) will be merged in [lexical order](http://golang.org/pkg/path/filepath/#Walk). So if multiple files declare a "consul" key for instance, the last one will be used.
+Note that not all fields are required. If you are not logging to syslog, you do
+not need to specify a syslog configuration.
 
-**Commands specified on the command line take precedence over those defined in a config file!**
+For additional security, tokens may also be read from the environment using the
+`CONSUL_TOKEN` environment variable. It is highly recommended that you do not
+put your tokens in plain-text in a configuration file.
 
-
-Leader Election
----------------
-Early versions of [Consul Replicate][] allowed multiple instances to run per data center for redundancy and high-availability. They used Consul's [leader election][] to elect a single node to perform the replication and gracefully fail over. As of Consul Replicate v0.2.0, Consul Replicate does not select a leader for you. To select a leader and lock, run the command with `consul lock` (requires Consul 0.5+):
+Instruct Consul Replicate to use a configuration file with the `-config` flag:
 
 ```shell
-consul lock locks/replicate consul-replicate -prefix ...
+$ consul-replicate -config "/my/config.hcl"
 ```
 
+This argument may be specified multiple times to load multiple configuration
+files. The right-most configuration takes the highest precedence. If the path to
+a directory is provided (as opposed to the path to a file), all of the files in
+the given directory will be merged in
+[lexical order](http://golang.org/pkg/path/filepath/#Walk), recursively. Please
+note that symbolic links are _not_ followed.
 
-Debugging
----------
-Consul Replicate can print verbose debugging output. To set the log level for Consul Replicate, use the `-log-level` flag:
+**Commands specified on the CLI take precedence over a config file!**
+
+## Debugging
+
+Consul Replicate can print verbose debugging output. To set the log level for
+Consul Replicate, use the `-log-level` flag:
 
 ```shell
 $ consul-replicate -log-level info ...
@@ -162,53 +277,65 @@ $ consul-replicate -log-level info ...
 # ...
 ```
 
-You can also specify the level as debug:
+You can also specify the level as trace:
 
 ```shell
-$ consul-replicate -log-level debug ...
+$ consul-replicate -log-level trace ...
 ```
 
 ```text
-<timestamp> [INFO] (runner) creating new runner (once: false)
-<timestamp> [INFO] (runner) creating consul/api client
-<timestamp> [DEBUG] (runner) setting address to 127.0.0.1:8500
-<timestamp> [DEBUG] (runner) setting basic auth
-<timestamp> [INFO] (runner) creating Watcher
-<timestamp> [INFO] (runner) starting
-<timestamp> [INFO] (watcher) adding "storeKeyPrefix(global@dc1)"
-<timestamp> [DEBUG] (watcher) "storeKeyPrefix(global@dc1)" starting
-<timestamp> [DEBUG] (view) "storeKeyPrefix(global@dc1)" starting fetch
-<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") querying Consul with ...
-<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") Consul returned 5 key pairs
-<timestamp> [INFO] (view) "storeKeyPrefix(global@dc1)" received data from consul
-<timestamp> [INFO] (runner) quiescence timers starting
-<timestamp> [DEBUG] (view) "storeKeyPrefix(global@dc1)" starting fetch
-<timestamp> [DEBUG] ("storeKeyPrefix(global@dc1)") querying Consul with ...
-<timestamp> [DEBUG] (runner) updated key "backup/five"
-<timestamp> [DEBUG] (runner) updated key "backup/four"
-<timestamp> [DEBUG] (runner) updated key "backup/one"
-<timestamp> [DEBUG] (runner) updated key "backup/three"
-<timestamp> [DEBUG] (runner) updated key "backup/two"
-<timestamp> [INFO] (runner) replicated 5 updates, 0 deletes
+<timestamp> [DEBUG] (cli) creating Runner
+<timestamp> [DEBUG] (cli) creating Consul API client
+<timestamp> [DEBUG] (cli) creating Watcher
+<timestamp> [DEBUG] (cli) looping for data
+<timestamp> [DEBUG] (watcher) starting watch
+<timestamp> [DEBUG] (watcher) all pollers have started, waiting for finish
+<timestamp> [DEBUG] (redis) starting poll
+<timestamp> [DEBUG] (service redis) querying Consul with &{...}
+<timestamp> [DEBUG] (service redis) Consul returned 2 services
+<timestamp> [DEBUG] (redis) writing data to channel
+<timestamp> [DEBUG] (redis) starting poll
+<timestamp> [INFO] (cli) received redis from Watcher
+<timestamp> [INFO] (cli) invoking Runner
+<timestamp> [DEBUG] (service redis) querying Consul with &{...}
 # ...
 ```
 
+## FAQ
 
-FAQ
----
 **Q: Can I use this for master-master replication?**<br>
-A: No, a proper leader will never be elected.
+A: Master-master replication is not possible. A leader would never be elected.
 
+## Contributing
 
-Contributing
-------------
-To hack on Consul Replicate, you will need a modern [Go][] environment of version 1.7 or higher. To compile the `consul-replicate` binary and run the test suite, simply execute:
+To build and install Consul Replicate locally, you will need to install the
+Docker engine:
+
+- [Docker for Mac](https://docs.docker.com/engine/installation/mac/)
+- [Docker for Windows](https://docs.docker.com/engine/installation/windows/)
+- [Docker for Linux](https://docs.docker.com/engine/installation/linux/ubuntulinux/)
+
+Clone the repository:
 
 ```shell
-$ make
+$ git clone https://github.com/hashicorp/consul-replicate.git
 ```
 
-This will compile the `consul-replicate` binary into `bin/consul-replicate` and run the test suite.
+To compile the `consul-replicate` binary for your local machine:
+
+```shell
+$ make dev
+```
+
+This will compile the `consul-replicate` binary into `bin/consul-replicate` as
+well as your `$GOPATH` and run the test suite.
+
+If you want to compile a specific binary, set `XC_OS` and `XC_ARCH` or run the
+following to generate all binaries:
+
+```shell
+$ make bin
+```
 
 If you just want to run the tests:
 
@@ -222,13 +349,6 @@ Or to run a specific test in the suite:
 go test ./... -run SomeTestFunction_name
 ```
 
-Submit Pull Requests and Issues to the [Consul Replicate project on GitHub][Consul Replicate].
-
-
-[Consul]: https://www.consul.io/ "Service discovery and configuration made easy"
-[leader election]: https://www.consul.io/docs/guides/leader-election.html "Consul Leader election"
-[Releases]: https://github.com/hashicorp/consul-replicate/releases "Consul Replicate releases page"
-[HCL]: https://github.com/hashicorp/hcl "HashiCorp Configuration Language (HCL)"
-[Go]: https://golang.org "Go the language"
-[Consul ACLs]: https://www.consul.io/docs/internals/acl.html "Consul ACLs"
-[Consul Replicate]: https://github.com/hashicorp/consul-replicate "Consul Replicate on GitHub"
+[consul]: https://www.consul.io "Consul by HashiCorp"
+[hcl]: https://github.com/hashicorp/hcl "HashiCorp Configuration Language (hcl)"
+[releases]: https://releases.hashicorp.com/consul-replicate "Consul Replicate Releases"
