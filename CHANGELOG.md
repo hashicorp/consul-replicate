@@ -1,5 +1,4 @@
-Consul Replicate Changelog
-==========================
+## Consul Replicate CHANGELOG
 
 ## v0.3.1.dev (January 28, 2017)
 
