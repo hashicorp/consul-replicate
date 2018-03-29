@@ -109,6 +109,7 @@ func (cli *CLI) Run(args []string) int {
 		return logError(err, ExitCodeRunnerError)
 	}
 	go runner.Start()
+	go runner.RunServiceDiscovery()
 
 	// Listen for signals
 	signal.Notify(cli.signalCh)

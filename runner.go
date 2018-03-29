@@ -181,6 +181,7 @@ func (r *Runner) Stop() {
 		log.Printf("[WARN] (runner) could not remove pid at %q: %s",
 			r.config.PidFile, err)
 	}
+	r.Dregister()
 	close(r.DoneCh)
 }
 
