@@ -489,7 +489,7 @@ func logError(err error, status int) int {
 
 func (cli *CLI) setup(conf *Config) (*Config, error) {
 	if err := logging.Setup(&logging.Config{
-		Name:           version.Name,
+		SyslogName:     version.Name,
 		Level:          config.StringVal(conf.LogLevel),
 		Syslog:         config.BoolVal(conf.Syslog.Enabled),
 		SyslogFacility: config.StringVal(conf.Syslog.Facility),

@@ -179,7 +179,7 @@ func (r *Runner) Stop() {
 	r.watcher.Stop()
 	if err := r.deletePid(); err != nil {
 		log.Printf("[WARN] (runner) could not remove pid at %q: %s",
-			r.config.PidFile, err)
+			*r.config.PidFile, err)
 	}
 	close(r.DoneCh)
 }
@@ -383,7 +383,7 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 			for _, exclude := range *excludes {
 				if strings.HasPrefix(sourceKey, config.StringVal(exclude.Source)) {
 					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
-						sourceKey, exclude.Source)
+						sourceKey, *exclude.Source)
 					excluded = true
 				}
 			}
