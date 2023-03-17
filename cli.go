@@ -381,6 +381,11 @@ func (cli *CLI) ParseFlags(args []string) (*Config, []string, bool, bool, error)
 		return nil
 	}), "wait", "")
 
+	flags.Var((funcBoolVar)(func(b bool) error {
+		c.DeleteKey = config.Bool(b)
+		return nil
+	}), "delete", "")
+
 	flags.BoolVar(&isVersion, "v", false, "")
 	flags.BoolVar(&isVersion, "version", false, "")
 
@@ -617,6 +622,10 @@ Options:
   -wait=<duration>
       Sets the 'min(:max)' amount of time to wait before writing a template (and
       triggering a command)
+
+  -delete=<boolean>
+      Enables deletion of keys in the destination datacenter that do not exist
+      in the source datacenter. Defaults to true
 
   -v, -version
       Print the version of this daemon

@@ -201,7 +201,7 @@ func (r *Runner) Run() error {
 
 	// Replicate each prefix in a goroutine
 	for _, prefix := range prefixes {
-		go r.replicate(prefix, r.config.Excludes, doneCh, errCh)
+		go r.replicate(prefix, r.config.Excludes, r.config.DeleteKey, doneCh, errCh)
 	}
 
 	var errs *multierror.Error
@@ -268,7 +268,7 @@ func (r *Runner) get(prefix *PrefixConfig) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneCh chan struct{}, errCh chan error) {
+func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, deleteKey *bool, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.clients.Consul().Agent().Self()
 	if err != nil {
@@ -374,7 +374,6 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 		errCh <- fmt.Errorf("failed to list keys: %s", err)
 		return
 	}
-	executed := false
 	for _, key := range localKeys {
 		excluded := false
 		// Ignore if the key falls under an excluded prefix
@@ -389,41 +388,15 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 			}
 		}
 
-		if _, ok := usedKeys[key]; !ok && !excluded {
-			if !executed {
-				executed = true
-				var input string
-				log.Printf("[INFO] Listing keys marked for deletion due to empty keys in primary")
-				//Wait 5 seconds for the operator to catch the message above in case there are multiple listed keys
-				time.Sleep(5 * time.Second)
-				//this will be pretty boilerplate, but this will print the keys marked for deletion in the destination
-				for _, emptyPrimaryKey := range localKeys {
-					if _, ok := usedKeys[emptyPrimaryKey]; !ok && !excluded {
-						fmt.Printf("%q\n", emptyPrimaryKey)
-					}
-				}
-				log.Print("[INFO] Do you want to continue with the deletion? (Y/N)")
-				fmt.Scan(&input)
-				if input == "Y" {
-					log.Printf("[INFO] Continuing...")
-					for _, emptyPrimaryKey := range localKeys {
-						if _, ok := usedKeys[emptyPrimaryKey]; !ok && !excluded {
-							if _, err := kv.Delete(emptyPrimaryKey, nil); err != nil {
-								errCh <- fmt.Errorf("failed to delete %q: %s", emptyPrimaryKey, err)
-								return
-							}
-							log.Printf("[DEBUG] (runner) deleted %q", emptyPrimaryKey)
-							deletes++
-						}
-					}
-				} else if input == "N" {
-					log.Printf("[INFO] Ok, will not delete listed keys")
-					break
-				} else {
-					log.Printf("[INFO] Invalid input.")
-					break
-				}
+		if _, ok := usedKeys[key]; !ok && !excluded && *deleteKey {
+			if _, err := kv.Delete(key, nil); err != nil {
+				errCh <- fmt.Errorf("failed to delete %q: %s", key, err)
+				return
 			}
+			log.Printf("[DEBUG] (runner) deleted %q", key)
+			deletes++
+		} else if _, ok := usedKeys[key]; !ok && !excluded && !*deleteKey {
+			log.Printf("DEBUG (runner) %q key exists in destination and not source", key)
 		}
 	}
 
