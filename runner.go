@@ -103,7 +103,9 @@ func (r *Runner) Start() {
 
 	// Add the dependencies to the watcher
 	for _, prefix := range *r.config.Prefixes {
-		r.watcher.Add(prefix.Dependency)
+		if _, err := r.watcher.Add(prefix.Dependency); err != nil {
+			log.Printf("ERR (runner) failed to add watch: %v", err)
+		}
 	}
 
 	// If once mode is on, wait until we get data back from all the views before proceeding

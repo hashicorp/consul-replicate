@@ -57,7 +57,7 @@ consul agent \
 CONSUL_DC1_PID=$!
 
 echo "--> Starting Consul in DC2..."
-echo "{\"ports\": {\"http\": ${PORT_DC2}, \"dns\": 8201, \"serf_lan\": 8203, \"serf_wan\": 8204, \"server\": 8205}}" > "${DATADIR_DC2}/${CONFIG_FILE}"
+echo "{\"ports\": {\"http\": ${PORT_DC2}, \"dns\": 8201, \"serf_lan\": 8203, \"serf_wan\": 8204, \"server\": 8205, \"grpc\": -1 ${grpcTLS}}}" > "${DATADIR_DC2}/${CONFIG_FILE}"
 consul agent \
   -dev \
   -datacenter "dc2" \
@@ -149,9 +149,5 @@ sleep 3
 echo "    Checking key still exists in DC2"
 consul kv get -http-addr="${ADDRESS_DC2}" "backup/${EXCLUDED_KEY}/nodelete" | grep -q "don't delete"
 
-echo "--> Cleaning up"
-rm -rf "${DATADIR_DC1}"
-rm -rf "${DATADIR_DC2}"
-
-echo "--> Done!"
+echo "--> PASS"
 exit 0
