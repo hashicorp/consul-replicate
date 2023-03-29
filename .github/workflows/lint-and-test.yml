@@ -5,6 +5,7 @@ name: Lint and Test
 on:
   push:
     branches: '**'
+  workflow_dispatch:
 permissions: {}
 jobs:
   lint-actions:
