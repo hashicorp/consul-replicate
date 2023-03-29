@@ -1,0 +1,8 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+# consul-core as code owner by default.
+# later matches take precedence.
+@hashicorp/consul-core
+
+/.github/workflows/* @hashicorp/release-engineering @hashicorp/consul-core

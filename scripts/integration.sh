@@ -4,11 +4,14 @@
 
 set -e
 
+RESULTS_DIR=${1:-"/tmp"}
+
 LOG_LEVEL="ERR"
 
-DATADIR_DC1=$(mktemp -d /tmp/consul-test1.XXXXXXXXXX)
-DATADIR_DC2=$(mktemp -d /tmp/consul-test2.XXXXXXXXXX)
+DATADIR_DC1=$(mktemp -d ${RESULTS_DIR}/consul-test1.XXXXXXXXXX)
+DATADIR_DC2=$(mktemp -d ${RESULTS_DIR}/consul-test2.XXXXXXXXXX)
 
+CONFIG_FILE="config.json"
 BIND="127.0.0.1"
 PORT_DC1="8100"
 PORT_DC2="8200"
@@ -17,9 +20,10 @@ ADDRESS_DC2="127.0.0.1:${PORT_DC2}"
 EXCLUDED_KEY="5"
 
 function cleanup {
-  kill -9 "${CONSUL_DC1_PID}" &>/dev/null
-  kill -9 "${CONSUL_DC2_PID}" &>/dev/null
-  kill -9 "${CONSUL_REPLICATE_PID}" &>/dev/null
+  [[ -n "${CONSUL_DC1_PID}" && -d "/proc/${CONSUL_DC1_PID}" ]] && kill -9 "${CONSUL_DC1_PID}" &>/dev/null
+  [[ -n "${CONSUL_DC2_PID}" && -d "/proc/${CONSUL_DC2_PID}" ]] && kill -9 "${CONSUL_DC2_PID}" &>/dev/null
+  [[ -n "${CONSUL_REPLICATE_PID}" && -d "/proc/${CONSUL_REPLICATE_PID}" ]] && kill -9 "${CONSUL_REPLICATE_PID}" &>/dev/null
+  rm -f "${CONSUL_REPLICATE_BIN}"
 }
 trap cleanup EXIT
 
@@ -32,41 +36,53 @@ echo "  ADDRESS_DC2: ${ADDRESS_DC2}"
 echo
 
 echo "--> Building Consul Replicate..."
-CONSUL_REPLICATE_BIN=$(mktemp /tmp/consul-replicate.XXXXXXXXXX)
+CONSUL_REPLICATE_BIN=$(mktemp ${RESULTS_DIR}/consul-replicate.XXXXXXXXXX)
 go build -o "${CONSUL_REPLICATE_BIN}"
 
+minorVersion=$(consul version | head -1 | cut -d . -f 2)
+grpcTLS=""
+[[ minorVersion -gt 13 ]] && grpcTLS=', "grpc_tls": -1'
+
 echo "--> Starting Consul in DC1..."
-echo "{\"ports\": {\"http\": ${PORT_DC1}, \"dns\": 8101, \"serf_lan\": 8103, \"serf_wan\": 8104, \"server\": 8105}}" > "${DATADIR_DC1}/config"
+echo "{\"ports\": {\"http\": ${PORT_DC1}, \"dns\": 8101, \"serf_lan\": 8103, \"serf_wan\": 8104, \"server\": 8105, \"grpc\": -1 ${grpcTLS}}}" > "${DATADIR_DC1}/${CONFIG_FILE}"
 consul agent \
   -dev \
   -datacenter "dc1" \
   -bind "${BIND}" \
-  -config-file "${DATADIR_DC1}/config" \
-  -data-dir "${DATADIR_DC2}" \
-  -log-level "ERR" \
-  &>/dev/null \
+  -config-file "${DATADIR_DC1}/${CONFIG_FILE}" \
+  -data-dir "${DATADIR_DC1}" \
+  -log-level "${LOG_LEVEL}" \
+  &> ${DATADIR_DC1}/consul-agent.log \
   &
 CONSUL_DC1_PID=$!
 
 echo "--> Starting Consul in DC2..."
-echo "{\"ports\": {\"http\": ${PORT_DC2}, \"dns\": 8201, \"serf_lan\": 8203, \"serf_wan\": 8204, \"server\": 8205}}" > "${DATADIR_DC2}/config"
+echo "{\"ports\": {\"http\": ${PORT_DC2}, \"dns\": 8201, \"serf_lan\": 8203, \"serf_wan\": 8204, \"server\": 8205}}" > "${DATADIR_DC2}/${CONFIG_FILE}"
 consul agent \
   -dev \
   -datacenter "dc2" \
   -bind "${BIND}" \
   -retry-join-wan "${BIND}:8104" \
-  -config-file "${DATADIR_DC2}/config" \
+  -config-file "${DATADIR_DC2}/${CONFIG_FILE}" \
   -data-dir "${DATADIR_DC2}" \
-  -log-level "ERR" \
-  &>/dev/null \
+  -log-level "${LOG_LEVEL}" \
+  &> ${DATADIR_DC2}/consul-agent.log \
   &
 CONSUL_DC2_PID=$!
 
 # Wait for ready
 until consul kv get -keys -http-addr "${ADDRESS_DC1}" &>/dev/null; do
+  if [ ! -d "/proc/${CONSUL_DC1_PID}" ]; then
+    echo "ERROR: Consul agent in dc1 is not running. Check the log at ${DATADIR_DC1}/consul-agent.log"
+    exit 1
+  fi
   sleep 0.5
 done
 until consul kv get -keys -http-addr "${ADDRESS_DC2}" &>/dev/null; do
+  if [ ! -d "/proc/${CONSUL_DC2_PID}" ]; then
+    echo "ERROR: Consul agent in dc1 is not running. Check the log at ${DATADIR_DC2}/consul-agent.log"
+    exit 1
+  fi
   sleep 0.5
 done
 
@@ -138,3 +154,4 @@ rm -rf "${DATADIR_DC1}"
 rm -rf "${DATADIR_DC2}"
 
 echo "--> Done!"
+exit 0
