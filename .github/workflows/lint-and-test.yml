@@ -113,7 +113,7 @@ jobs:
       - name: Integration tests
         run: |
           mkdir -p "$TEST_RESULTS_DIR/${{ matrix.consul-version }}"
-          sh -c ./scripts/integration.sh "$TEST_RESULTS_DIR/${{ matrix.consul-version }}" \
+          ./scripts/integration.sh "$TEST_RESULTS_DIR/${{ matrix.consul-version }}" \
             | tee "$TEST_RESULTS_DIR/${{ matrix.consul-version }}/integration.log"
       - uses: actions/upload-artifact@v3
         with:
