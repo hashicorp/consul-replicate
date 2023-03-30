@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"syscall"
@@ -19,7 +18,7 @@ import (
 func TestCLI_ParseFlags(t *testing.T) {
 	t.Parallel()
 
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}

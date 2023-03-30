@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"syscall"
@@ -894,24 +893,24 @@ func TestConfig_Merge(t *testing.T) {
 }
 
 func TestFromPath(t *testing.T) {
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
 
-	emptyDir, err := ioutil.TempDir(os.TempDir(), "")
+	emptyDir, err := os.MkdirTemp(os.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(emptyDir)
 
-	configDir, err := ioutil.TempDir(os.TempDir(), "")
+	configDir, err := os.MkdirTemp(os.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(configDir)
-	cf1, err := ioutil.TempFile(configDir, "")
+	cf1, err := os.CreateTemp(configDir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -920,10 +919,10 @@ func TestFromPath(t *testing.T) {
 			address = "1.2.3.4"
 		}
 	`)
-	if err = ioutil.WriteFile(cf1.Name(), d, 0644); err != nil {
+	if err = os.WriteFile(cf1.Name(), d, 0644); err != nil {
 		t.Fatal(err)
 	}
-	cf2, err := ioutil.TempFile(configDir, "")
+	cf2, err := os.CreateTemp(configDir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -932,7 +931,7 @@ func TestFromPath(t *testing.T) {
 			token = "token"
 		}
 	`)
-	if err := ioutil.WriteFile(cf2.Name(), d, 0644); err != nil {
+	if err := os.WriteFile(cf2.Name(), d, 0644); err != nil {
 		t.Fatal(err)
 	}
 
