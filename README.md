@@ -1,6 +1,6 @@
 # Consul Replicate
 
-![Build Status](https://github.com/hashicorp/consul-replicate/actions/workflows/lint-and-test/badge.svg)
+![Build Status](https://github.com/hashicorp/consul-replicate/actions/workflows/lint-and-test.yml/badge.svg)
 
 This project provides a convenient way to replicate values from one
 [Consul][consul] datacenter to another using the `consul-replicate` daemon.
