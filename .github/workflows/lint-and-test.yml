@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 
 name: Lint and Test
-on:
-  push:
-    branches: '**'
-  workflow_dispatch:
+on: ["push", "workflow_dispatch"]
+permissions: {}
 jobs:
   lint-actions:
     runs-on: ubuntu-latest
