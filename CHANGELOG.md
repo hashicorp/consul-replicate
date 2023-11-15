@@ -1,5 +1,11 @@
 ## Consul Replicate CHANGELOG
 
+## Unreleased
+
+IMPROVEMENTS:
+
+  - Update to go 1.20 [[GH-112]](https://github.com/hashicorp/consul-replicate/pull/112)
+
 ## v0.4.0 (August 10, 2017)
 
 IMPROVEMENTS:

@@ -1,0 +1,119 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+name: Lint and Test
+on: ["push", "workflow_dispatch"]
+permissions: {}
+jobs:
+  lint-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Lint workflow
+        uses: docker://docker.mirror.hashicorp.services/rhysd/actionlint:latest
+  go-version:
+    runs-on: ubuntu-latest
+    needs:
+      - lint-actions
+    outputs:
+      go-version: ${{ steps.go-version.outputs.go-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Determine Go version
+        id: go-version
+        # We use .go-version as our source of truth for current Go
+        # version, because "goenv" can react to it automatically.
+        run: |
+          echo "Building with Go $(cat .go-version)"
+          echo "go-version=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+  lint:
+    runs-on: ubuntu-latest
+    needs:
+      - go-version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Setup Go
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version: ${{ needs.go-version.outputs.go-version }}
+      - name: Go CI lint
+        uses: golangci/golangci-lint-action@639cd343e1d3b897ff35927a75193d57cfcba299 # v3.6.0
+        with:
+          args: "--verbose --enable gofmt"
+          only-new-issues: false
+          skip-pkg-cache: true
+          skip-build-cache: true
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs:
+      - go-version
+    env:
+      TEST_RESULTS_DIR: /tmp/unit-test-results
+      GOTESTSUM_VERSION: 1.9.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Setup Go
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version: ${{ needs.go-version.outputs.go-version }}
+      - name: Install gotestsum
+        shell: bash
+        run: |
+          url=https://github.com/gotestyourself/gotestsum/releases/download
+          curl -sSL "${url}/v${{ env.GOTESTSUM_VERSION }}/gotestsum_${{ env.GOTESTSUM_VERSION }}_linux_amd64.tar.gz" | \
+          tar -xz --overwrite -C /usr/local/bin gotestsum
+      - name: Test
+        run: |
+          mkdir -p "$TEST_RESULTS_DIR/json"
+          gotestsum \
+            --format=short-verbose \
+            --jsonfile "$TEST_RESULTS_DIR/json/go-test-race.log" \
+            --junitfile "$TEST_RESULTS_DIR/gotestsum-report.xml" \
+            -- -race ./...
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: unit-test-results
+          path: ${{ env.TEST_RESULTS_DIR }}
+  integration-tests:
+    name: Integration test - Consul ${{ matrix.consul-version }}
+    runs-on: ubuntu-latest
+    needs:
+      - go-version
+    env:
+      TEST_RESULTS_DIR: /tmp/integration-test-results
+    strategy:
+      fail-fast: false
+      matrix:
+        consul-version:
+          - 1.15.1
+          - 1.14.5
+          - 1.13.7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Setup Go
+        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        with:
+          go-version: ${{ needs.go-version.outputs.go-version }}
+      - name: Install Consul ${{ matrix.consul-version }}
+        shell: bash
+        run: |
+          CONSUL_VERSION="${{ matrix.consul-version }}"
+          FILENAME="consul_${CONSUL_VERSION}_linux_amd64.zip"
+          curl -sSLO "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/${FILENAME}" && \
+            unzip "${FILENAME}" -d /usr/local/bin && \
+            rm "${FILENAME}"
+          consul version
+      - name: Integration tests
+        run: |
+          mkdir -p "$TEST_RESULTS_DIR/${{ matrix.consul-version }}"
+          ./scripts/integration.sh "$TEST_RESULTS_DIR/${{ matrix.consul-version }}" \
+            | tee "$TEST_RESULTS_DIR/${{ matrix.consul-version }}/integration-${{ matrix.consul-version }}.log"
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: "integration-test-results-${{ matrix.consul-version }}"
+          path: ${{ env.TEST_RESULTS_DIR }}/${{ matrix.consul-version }}

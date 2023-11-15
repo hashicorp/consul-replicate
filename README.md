@@ -1,6 +1,6 @@
 # Consul Replicate
 
-[![Build Status](http://img.shields.io/travis/hashicorp/consul-replicate.svg?style=flat-square)](https://travis-ci.org/hashicorp/consul-replicate)
+![Build Status](https://github.com/hashicorp/consul-replicate/actions/workflows/lint-and-test.yml/badge.svg)
 
 This project provides a convenient way to replicate values from one
 [Consul][consul] datacenter to another using the `consul-replicate` daemon.

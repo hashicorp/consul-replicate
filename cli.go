@@ -1,10 +1,12 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package main
 
 import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -47,8 +49,7 @@ type CLI struct {
 	signalCh chan os.Signal
 
 	// stopCh is an internal channel used to trigger a shutdown of the CLI.
-	stopCh  chan struct{}
-	stopped bool
+	stopCh chan struct{}
 }
 
 func NewCLI(out, err io.Writer) *CLI {
@@ -171,19 +172,6 @@ func (cli *CLI) Run(args []string) int {
 	}
 }
 
-// stop is used internally to shutdown a running CLI
-func (cli *CLI) stop() {
-	cli.Lock()
-	defer cli.Unlock()
-
-	if cli.stopped {
-		return
-	}
-
-	close(cli.stopCh)
-	cli.stopped = true
-}
-
 // ParseFlags is a helper function for parsing command line flags using Go's
 // Flag library. This is extracted into a helper to keep the main function
 // small, but it also makes writing tests for parsing command line arguments
@@ -197,7 +185,7 @@ func (cli *CLI) ParseFlags(args []string) (*Config, []string, bool, bool, error)
 
 	// Parse the flags and options
 	flags := flag.NewFlagSet(version.Name, flag.ContinueOnError)
-	flags.SetOutput(ioutil.Discard)
+	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
 
 	flags.Var((funcVar)(func(s string) error {
