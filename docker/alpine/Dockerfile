@@ -4,7 +4,7 @@
 #
 # Builder
 #
-FROM golang:1.8 AS builder
+FROM golang:1.20 AS builder
 LABEL maintainer "Seth Vargo <seth@sethvargo.com> (@sethvargo)"
 
 ARG LD_FLAGS

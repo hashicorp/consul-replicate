@@ -15,7 +15,7 @@ GOTAGS ?=
 GOMAXPROCS ?= 4
 
 # Get the project metadata
-GOVERSION := 1.8.1
+GOVERSION := 1.20
 PROJECT := $(CURRENT_DIR:$(GOPATH)/src/%=%)
 OWNER := $(notdir $(patsubst %/,%,$(dir $(PROJECT))))
 NAME := $(notdir $(PROJECT))
@@ -30,8 +30,8 @@ GOARCH ?= $(shell go env GOARCH)
 
 # Default os-arch combination to build
 XC_OS ?= darwin freebsd linux netbsd openbsd solaris windows
-XC_ARCH ?= 386 amd64 arm
-XC_EXCLUDE ?= darwin/arm solaris/386 solaris/arm windows/arm
+XC_ARCH ?= 386 amd64 arm arm64
+XC_EXCLUDE ?= darwin/arm solaris/386 solaris/arm solaris/arm64 windows/arm windows/arm64
 
 # GPG Signing key (blank by default, means no GPG signing)
 GPG_KEY ?=
@@ -64,7 +64,7 @@ define make-xc-target
 			--dns="8.8.8.8" \
 			--volume="${CURRENT_DIR}:/go/src/${PROJECT}" \
 			--workdir="/go/src/${PROJECT}" \
-			"golang:1.8" \
+			"golang:1.20" \
 			env \
 				CGO_ENABLED="0" \
 				GOOS="${1}" \
