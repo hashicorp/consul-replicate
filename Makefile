@@ -15,7 +15,7 @@ GOTAGS ?=
 GOMAXPROCS ?= 4
 
 # Get the project metadata
-GOVERSION := 1.8.1
+GOVERSION := 1.20
 PROJECT := $(CURRENT_DIR:$(GOPATH)/src/%=%)
 OWNER := $(notdir $(patsubst %/,%,$(dir $(PROJECT))))
 NAME := $(notdir $(PROJECT))
@@ -64,7 +64,7 @@ define make-xc-target
 			--dns="8.8.8.8" \
 			--volume="${CURRENT_DIR}:/go/src/${PROJECT}" \
 			--workdir="/go/src/${PROJECT}" \
-			"golang:1.8" \
+			"golang:1.20" \
 			env \
 				CGO_ENABLED="0" \
 				GOOS="${1}" \
@@ -138,7 +138,6 @@ define make-docker-target
 			--rm \
 			--force-rm \
 			--no-cache \
-			--squash \
 			--compress \
 			--file="docker/${1}/Dockerfile" \
 			--build-arg="LD_FLAGS=${LD_FLAGS}" \

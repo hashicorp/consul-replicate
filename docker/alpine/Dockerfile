@@ -4,8 +4,8 @@
 #
 # Builder
 #
-FROM golang:1.8 AS builder
-LABEL maintainer "Seth Vargo <seth@sethvargo.com> (@sethvargo)"
+FROM golang:1.20 AS builder
+LABEL maintainer="Consul Team <consul@hashicorp.com>"
 
 ARG LD_FLAGS
 ARG GOTAGS
@@ -22,7 +22,7 @@ RUN \
 # Final
 #
 FROM alpine:latest
-LABEL maintainer "Seth Vargo <seth@sethvargo.com> (@sethvargo)"
+LABEL maintainer="Consul Team <consul@hashicorp.com>"
 
 
 # This is the release of https://github.com/hashicorp/docker-base to pull in
