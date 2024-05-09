@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Lint workflow
         uses: docker://docker.mirror.hashicorp.services/rhysd/actionlint:latest
   go-version:
@@ -20,7 +20,7 @@ jobs:
       go-version: ${{ steps.go-version.outputs.go-version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Determine Go version
         id: go-version
         # We use .go-version as our source of truth for current Go
@@ -34,13 +34,13 @@ jobs:
       - go-version
     steps:
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Setup Go
-        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version: ${{ needs.go-version.outputs.go-version }}
       - name: Go CI lint
-        uses: golangci/golangci-lint-action@639cd343e1d3b897ff35927a75193d57cfcba299 # v3.6.0
+        uses: golangci/golangci-lint-action@38e1018663fa5173f3968ea0777460d3de38f256 # v5.3.0
         with:
           args: "--verbose --enable gofmt"
           only-new-issues: false
@@ -55,9 +55,9 @@ jobs:
       GOTESTSUM_VERSION: 1.9.0
     steps:
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Setup Go
-        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version: ${{ needs.go-version.outputs.go-version }}
       - name: Install gotestsum
@@ -74,7 +74,7 @@ jobs:
             --jsonfile "$TEST_RESULTS_DIR/json/go-test-race.log" \
             --junitfile "$TEST_RESULTS_DIR/gotestsum-report.xml" \
             -- -race ./...
-      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: unit-test-results
           path: ${{ env.TEST_RESULTS_DIR }}
@@ -94,9 +94,9 @@ jobs:
           - 1.13.7
     steps:
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Setup Go
-        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version: ${{ needs.go-version.outputs.go-version }}
       - name: Install Consul ${{ matrix.consul-version }}
@@ -113,7 +113,7 @@ jobs:
           mkdir -p "$TEST_RESULTS_DIR/${{ matrix.consul-version }}"
           ./scripts/integration.sh "$TEST_RESULTS_DIR/${{ matrix.consul-version }}" \
             | tee "$TEST_RESULTS_DIR/${{ matrix.consul-version }}/integration-${{ matrix.consul-version }}.log"
-      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: "integration-test-results-${{ matrix.consul-version }}"
           path: ${{ env.TEST_RESULTS_DIR }}/${{ matrix.consul-version }}
