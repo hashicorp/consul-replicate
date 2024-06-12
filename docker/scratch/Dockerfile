@@ -4,7 +4,7 @@
 #
 # Builder
 #
-FROM golang:1.20 AS builder
+FROM golang:1.22.4 AS builder
 LABEL maintainer="Consul Team <consul@hashicorp.com>"
 
 ARG LD_FLAGS
