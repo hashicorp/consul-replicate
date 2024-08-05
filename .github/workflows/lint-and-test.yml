@@ -40,7 +40,7 @@ jobs:
         with:
           go-version: ${{ needs.go-version.outputs.go-version }}
       - name: Go CI lint
-        uses: golangci/golangci-lint-action@38e1018663fa5173f3968ea0777460d3de38f256 # v5.3.0
+        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
         with:
           args: "--verbose --enable gofmt"
           only-new-issues: false
