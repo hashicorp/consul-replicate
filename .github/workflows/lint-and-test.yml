@@ -74,7 +74,7 @@ jobs:
             --jsonfile "$TEST_RESULTS_DIR/json/go-test-race.log" \
             --junitfile "$TEST_RESULTS_DIR/gotestsum-report.xml" \
             -- -race ./...
-      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      - uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: unit-test-results
           path: ${{ env.TEST_RESULTS_DIR }}
@@ -113,7 +113,7 @@ jobs:
           mkdir -p "$TEST_RESULTS_DIR/${{ matrix.consul-version }}"
           ./scripts/integration.sh "$TEST_RESULTS_DIR/${{ matrix.consul-version }}" \
             | tee "$TEST_RESULTS_DIR/${{ matrix.consul-version }}/integration-${{ matrix.consul-version }}.log"
-      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      - uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: "integration-test-results-${{ matrix.consul-version }}"
           path: ${{ env.TEST_RESULTS_DIR }}/${{ matrix.consul-version }}
