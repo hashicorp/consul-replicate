@@ -3,6 +3,6 @@
 
 # consul-core as code owner by default.
 # later matches take precedence.
-@hashicorp/consul-core
+@hashicorp/consul-selfmanage-maintainers
 
-/.github/workflows/* @hashicorp/release-engineering @hashicorp/consul-core
+/.github/workflows/* @hashicorp/team-selfmanaged-releng @hashicorp/consul-selfmanage-maintainers
