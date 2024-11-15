@@ -1,8 +1,6 @@
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
-# consul-core as code owner by default.
-# later matches take precedence.
 @hashicorp/consul-selfmanage-maintainers
 
 /.github/workflows/* @hashicorp/team-selfmanaged-releng @hashicorp/consul-selfmanage-maintainers
