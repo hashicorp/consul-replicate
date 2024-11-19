@@ -1,6 +1,6 @@
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
-@hashicorp/consul-selfmanage-maintainers
+* @hashicorp/consul-selfmanage-maintainers
 
 /.github/workflows/* @hashicorp/team-selfmanaged-releng @hashicorp/consul-selfmanage-maintainers
