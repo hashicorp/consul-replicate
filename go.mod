@@ -1,6 +1,6 @@
 module github.com/hashicorp/consul-replicate
 
-go 1.20
+go 1.24
 
 require (
 	github.com/hashicorp/consul-template v0.25.2
@@ -37,11 +37,11 @@ require (
 	github.com/mitchellh/hashstructure v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
-	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0 // indirect
-	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c // indirect
-	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f // indirect
-	golang.org/x/text v0.3.3 // indirect
-	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/time v0.11.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
