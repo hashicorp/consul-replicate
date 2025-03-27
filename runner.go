@@ -205,7 +205,7 @@ func (r *Runner) Run() error {
 
 	// Replicate each prefix in a goroutine
 	for _, prefix := range prefixes {
-		go r.replicate(prefix, r.config.Excludes, doneCh, errCh)
+		go r.replicate(prefix, r.config.Excludes, r.config.DeleteKey, doneCh, errCh)
 	}
 
 	var errs *multierror.Error
@@ -268,7 +268,7 @@ func (r *Runner) get(prefix *PrefixConfig) (*watch.View, bool) {
 // replicate performs replication into the current datacenter from the given
 // prefix. This function is designed to be called via a goroutine since it is
 // expensive and needs to be parallelized.
-func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneCh chan struct{}, errCh chan error) {
+func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, deleteKey *bool, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
 	info, err := r.clients.Consul().Agent().Self()
 	if err != nil {
@@ -376,7 +376,6 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 	}
 	for _, key := range localKeys {
 		excluded := false
-
 		// Ignore if the key falls under an excluded prefix
 		if len(*excludes) > 0 {
 			sourceKey := strings.Replace(key, config.StringVal(prefix.Destination), config.StringVal(prefix.Source), -1)
@@ -389,13 +388,15 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 			}
 		}
 
-		if _, ok := usedKeys[key]; !ok && !excluded {
+		if _, ok := usedKeys[key]; !ok && !excluded && *deleteKey {
 			if _, err := kv.Delete(key, nil); err != nil {
 				errCh <- fmt.Errorf("failed to delete %q: %s", key, err)
 				return
 			}
 			log.Printf("[DEBUG] (runner) deleted %q", key)
 			deletes++
+		} else if _, ok := usedKeys[key]; !ok && !excluded && !*deleteKey {
+			log.Printf("DEBUG (runner) %q key exists in destination and not source", key)
 		}
 	}
 
