@@ -374,9 +374,9 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 		errCh <- fmt.Errorf("failed to list keys: %s", err)
 		return
 	}
+	executed := false
 	for _, key := range localKeys {
 		excluded := false
-
 		// Ignore if the key falls under an excluded prefix
 		if len(*excludes) > 0 {
 			sourceKey := strings.Replace(key, config.StringVal(prefix.Destination), config.StringVal(prefix.Source), -1)
@@ -390,12 +390,40 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 		}
 
 		if _, ok := usedKeys[key]; !ok && !excluded {
-			if _, err := kv.Delete(key, nil); err != nil {
-				errCh <- fmt.Errorf("failed to delete %q: %s", key, err)
-				return
+			if !executed {
+				executed = true
+				var input string
+				log.Printf("[INFO] Listing keys marked for deletion due to empty keys in primary")
+				//Wait 5 seconds for the operator to catch the message above in case there are multiple listed keys
+				time.Sleep(5 * time.Second)
+				//this will be pretty boilerplate, but this will print the keys marked for deletion in the destination
+				for _, emptyPrimaryKey := range localKeys {
+					if _, ok := usedKeys[emptyPrimaryKey]; !ok && !excluded {
+						fmt.Printf("%q\n", emptyPrimaryKey)
+					}
+				}
+				log.Print("[INFO] Do you want to continue with the deletion? (Y/N)")
+				fmt.Scan(&input)
+				if input == "Y" {
+					log.Printf("[INFO] Continuing...")
+					for _, emptyPrimaryKey := range localKeys {
+						if _, ok := usedKeys[emptyPrimaryKey]; !ok && !excluded {
+							if _, err := kv.Delete(emptyPrimaryKey, nil); err != nil {
+								errCh <- fmt.Errorf("failed to delete %q: %s", emptyPrimaryKey, err)
+								return
+							}
+							log.Printf("[DEBUG] (runner) deleted %q", emptyPrimaryKey)
+							deletes++
+						}
+					}
+				} else if input == "N" {
+					log.Printf("[INFO] Ok, will not delete listed keys")
+					break
+				} else {
+					log.Printf("[INFO] Invalid input.")
+					break
+				}
 			}
-			log.Printf("[DEBUG] (runner) deleted %q", key)
-			deletes++
 		}
 	}
 
