@@ -379,7 +379,7 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 
 		// Ignore if the key falls under an excluded prefix
 		if len(*excludes) > 0 {
-			sourceKey := strings.Replace(key, config.StringVal(prefix.Destination), config.StringVal(prefix.Source), -1)
+			sourceKey := strings.ReplaceAll(key, config.StringVal(prefix.Destination), config.StringVal(prefix.Source))
 			for _, exclude := range *excludes {
 				if strings.HasPrefix(sourceKey, config.StringVal(exclude.Source)) {
 					log.Printf("[DEBUG] (runner) key %q has prefix %q, excluding from deletes",
@@ -470,10 +470,10 @@ func (r *Runner) storePid() error {
 	if err != nil {
 		return fmt.Errorf("runner: could not open pid file: %s", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	pid := os.Getpid()
-	_, err = f.WriteString(fmt.Sprintf("%d", pid))
+	_, err = fmt.Fprintf(f, "%d", pid)
 	if err != nil {
 		return fmt.Errorf("runner: could not write to pid file: %s", err)
 	}

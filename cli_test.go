@@ -22,7 +22,7 @@ func TestCLI_ParseFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 
 	cases := []struct {
 		name string

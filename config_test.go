@@ -897,19 +897,19 @@ func TestFromPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 
 	emptyDir, err := os.MkdirTemp(os.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(emptyDir)
+	defer func() { _ = os.RemoveAll(emptyDir) }()
 
 	configDir, err := os.MkdirTemp(os.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(configDir)
+	defer func() { _ = os.RemoveAll(configDir) }()
 	cf1, err := os.CreateTemp(configDir, "")
 	if err != nil {
 		t.Fatal(err)
@@ -1035,7 +1035,7 @@ func TestDefaultConfig(t *testing.T) {
 			if err := os.Setenv(tc.env, tc.val); err != nil {
 				t.Fatal(err)
 			}
-			defer os.Unsetenv(tc.env)
+			defer func() { _ = os.Unsetenv(tc.env) }()
 
 			r := DefaultConfig()
 			r.Merge(tc.e)
