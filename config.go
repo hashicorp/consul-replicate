@@ -36,6 +36,8 @@ const (
 
 	// DefaultStatusDir is the default directory to post status information.
 	DefaultStatusDir = "service/consul-replicate/statuses"
+	// DefaultDeleteKey is the default value for deleting destination keys if source keys are empty.
+	DefaultDeleteKey = true
 )
 
 // Config is used to configure Consul ENV
@@ -75,6 +77,8 @@ type Config struct {
 
 	// Wait is the quiescence timers.
 	Wait *config.WaitConfig `mapstructure:"wait"`
+
+	DeleteKey *bool `mapstructure:"delete_key"`
 }
 
 // Copy returns a deep copy of the current configuration. This is useful because
@@ -113,6 +117,8 @@ func (c *Config) Copy() *Config {
 	if c.Wait != nil {
 		o.Wait = c.Wait.Copy()
 	}
+
+	o.DeleteKey = c.DeleteKey
 
 	return &o
 }
@@ -175,6 +181,10 @@ func (c *Config) Merge(o *Config) *Config {
 		r.Wait = r.Wait.Merge(o.Wait)
 	}
 
+	if o.DeleteKey != nil {
+		r.DeleteKey = o.DeleteKey
+	}
+
 	return r
 }
 
@@ -196,6 +206,7 @@ func (c *Config) GoString() string {
 		"StatusDir:%s, "+
 		"Syslog:%s, "+
 		"Wait:%s"+
+		"DeleteKey:%s"+
 		"}",
 		c.Consul.GoString(),
 		c.Excludes.GoString(),
@@ -208,12 +219,14 @@ func (c *Config) GoString() string {
 		config.StringGoString(c.StatusDir),
 		c.Syslog.GoString(),
 		c.Wait.GoString(),
+		config.BoolGoString(c.DeleteKey),
 	)
 }
 
 // DefaultConfig returns the default configuration struct. Certain environment
 // variables may be set which control the values for the default configuration.
 func DefaultConfig() *Config {
+
 	return &Config{
 		Consul:    config.DefaultConsulConfig(),
 		Excludes:  DefaultExcludeConfigs(),
@@ -221,6 +234,7 @@ func DefaultConfig() *Config {
 		StatusDir: config.String(DefaultStatusDir),
 		Syslog:    config.DefaultSyslogConfig(),
 		Wait:      config.DefaultWaitConfig(),
+		DeleteKey: config.Bool(DefaultDeleteKey),
 	}
 }
 
@@ -285,6 +299,10 @@ func (c *Config) Finalize() {
 		c.Wait = config.DefaultWaitConfig()
 	}
 	c.Wait.Finalize()
+
+	if c.DeleteKey == nil {
+		c.DeleteKey = config.Bool(DefaultDeleteKey)
+	}
 }
 
 // Parse parses the given string contents as a config
