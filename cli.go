@@ -68,10 +68,10 @@ func (cli *CLI) Run(args []string) int {
 	cfg, paths, once, isVersion, err := cli.ParseFlags(args[1:])
 	if err != nil {
 		if err == flag.ErrHelp {
-			fmt.Fprintf(cli.errStream, usage, version.Name)
+			_, _ = fmt.Fprintf(cli.errStream, usage, version.Name)
 			return 0
 		}
-		fmt.Fprintln(cli.errStream, err.Error())
+		_, _ = fmt.Fprintln(cli.errStream, err.Error())
 		return ExitCodeParseFlagsError
 	}
 
@@ -100,7 +100,7 @@ func (cli *CLI) Run(args []string) int {
 	// print their version on stderr anyway.
 	if isVersion {
 		log.Printf("[DEBUG] (cli) version flag was given, exiting now")
-		fmt.Fprintf(cli.errStream, "%s\n", version.HumanVersion)
+		_, _ = fmt.Fprintf(cli.errStream, "%s\n", version.HumanVersion)
 		return ExitCodeOK
 	}
 
@@ -131,7 +131,7 @@ func (cli *CLI) Run(args []string) int {
 
 			switch s {
 			case *cfg.ReloadSignal:
-				fmt.Fprintf(cli.errStream, "Reloading configuration...\n")
+				_, _ = fmt.Fprintf(cli.errStream, "Reloading configuration...\n")
 				runner.Stop()
 
 				// Re-parse any configuration files or paths
@@ -153,7 +153,7 @@ func (cli *CLI) Run(args []string) int {
 				}
 				go runner.Start()
 			case *cfg.KillSignal:
-				fmt.Fprintf(cli.errStream, "Cleaning up...\n")
+				_, _ = fmt.Fprintf(cli.errStream, "Cleaning up...\n")
 				runner.Stop()
 				return ExitCodeInterrupt
 			case signals.SignalLookup["SIGCHLD"]:

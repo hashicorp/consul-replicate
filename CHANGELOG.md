@@ -5,6 +5,7 @@
 IMPROVEMENTS:
 
   - Update to go 1.20 [[GH-112]](https://github.com/hashicorp/consul-replicate/pull/112)
+  - Update to go 1.26.8 and golang.org/x/net to v0.59.0 to address multiple all open CVE security vulnerabilities. [[GH-181]](https://github.com/hashicorp/consul-replicate/pull/181)
 
 ## v0.4.0 (August 10, 2017)
 
