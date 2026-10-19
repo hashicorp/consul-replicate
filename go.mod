@@ -1,10 +1,10 @@
 module github.com/hashicorp/consul-replicate
 
-go 1.26.8
+go 1.26.9
 
 require (
 	github.com/hashicorp/consul-template v0.43.0
-	github.com/hashicorp/consul/api v1.34.4
+	github.com/hashicorp/consul/api v1.35.0
 	github.com/hashicorp/go-gatedio v0.5.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/hcl v1.0.1-vault-7
@@ -51,6 +51,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
@@ -60,5 +61,6 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
