@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.4.1 (October 19, 2026)
+
 IMPROVEMENTS:
 
   - Update to go 1.20 [[GH-112]](https://github.com/hashicorp/consul-replicate/pull/112)
