@@ -6,7 +6,8 @@
 
 IMPROVEMENTS:
 
-  - Update to golang.org/x/net to v0.60.0 to address multiple open CVE security vulnerabilities. [[GH-183]](https://github.com/hashicorp/consul-replicate/pull/183)
+  - Update `consul/api` to `v1.35.0`, `consul/sdk` to `v0.19.0` and go version to `1.26.9` [[GH-184]](https://github.com/hashicorp/consul-replicate/pull/184)
+  - Update golang.org/x/net to v0.60.0 to address multiple open CVE security vulnerabilities. [[GH-183]](https://github.com/hashicorp/consul-replicate/pull/183)
   - Update to go 1.26.8 and golang.org/x/net to v0.59.0 to address multiple open CVE security vulnerabilities. [[GH-181]](https://github.com/hashicorp/consul-replicate/pull/181)
 
 ## v0.4.0 (August 10, 2017)
